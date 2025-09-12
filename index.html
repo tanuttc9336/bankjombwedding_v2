@@ -1,0 +1,1900 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>แบงค์ ♥ จ๋อม — Wedding Flappy (v5)</title>
+<meta name="description" content="Flappy-style mini game: เจ้าบ่าว 'แบงค์' บินผ่านประตูเงินประตูทองไปหาเจ้าสาว 'จ๋อม' — 8-bit retro พร้อมเพื่อนเจ้าสาวยืนระหว่างเสาและโปรยดอกไม้เมื่อผ่านประตู">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --cream:#F7E8D9;
+    --pink:#F4B6C2;
+    --green:#A9DDB3;
+    --gold:#D4AF37;
+    --silver:#C0C0C0;
+    --deep:#503A2F;
+    --white:#FFFFFF;
+    --shadow:#00000020;
+  }
+  html,body{
+    margin:0;
+    height:100%;
+    background: linear-gradient(180deg,var(--cream), #fff0 60%), var(--cream);
+    font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, "Noto Sans Thai", sans-serif;
+    color: var(--deep);
+  }
+  .wrap{
+    max-width: 480px;
+    margin: 10px auto 32px;
+    padding: 0 12px;
+  }
+  h1{
+    font-size: 22px; /* bigger & louder */
+    font-weight: 800;
+    margin: 8px 0 12px;
+    text-align:center;
+    letter-spacing:.6px;
+  }
+  .card{
+    position: relative; /* allow absolute children (camera button) */
+    background: var(--white);
+    border-radius: 14px;
+    box-shadow: 0 10px 24px var(--shadow);
+    padding: 10px 10px 16px;
+  }
+  #stage{
+    display:block;
+    width:100%;
+    height:auto;
+    border-radius: 10px;
+    background: var(--cream);
+    box-shadow: inset 0 0 0 2px #00000012;
+    touch-action: manipulation;
+  }
+  .hud{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-top:8px;
+    gap:8px;
+    font-size:14px;
+  }
+  .btn{
+    appearance:none;
+    border:none;
+    border-radius:10px;
+    padding:10px 14px;
+    background: var(--green);
+    color:#19452b;
+    font-weight:700;
+    cursor:pointer;
+    box-shadow: 0 6px 14px var(--shadow);
+  }
+  .btn:active{ transform: translateY(1px); }
+  .btn#camBtn{
+    position: absolute;
+    top: 10px;        /* move up */
+    right: 10px;      /* stick to right edge */
+    background:#ffffff;
+    color:#333;
+    border:2px solid #00000012;
+    padding:8px 12px; /* a bit more compact */
+    z-index: 5;
+  }
+  .btn#recBtn{
+    position: absolute;
+    top: 52px;         /* sit below the camera button */
+    right: 10px;
+    background:#ffffff;
+    color:#333;
+    border:2px solid #00000012;
+    padding:8px 12px;
+    z-index: 5;
+  }
+  .btn#recBtn.active{ border-color:#ff8a80; color:#b00020; background:#fff5f5; }
+  .pill{
+    border-radius:999px;
+    background:#ffffffcc;
+    padding:6px 10px;
+    box-shadow: 0 2px 10px var(--shadow);
+    white-space:nowrap;
+  }
+  .muted{opacity:.7}
+  .note{font-size:12px; opacity:.85; text-align:center; margin-top:8px}
+  .row{display:flex; gap:8px; align-items:center; justify-content:center; flex-wrap:wrap}
+  .pixel{ font-family: 'Press Start 2P', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .pixel-tight{ letter-spacing: 0; }
+  .overlay-switch{
+    position:absolute;
+    left:50%; top:50%; transform:translate(-50%, -50%);
+    display:none; /* shown only when phase==='ready' */
+    gap:0; border-radius:12px; overflow:hidden;
+    box-shadow:0 10px 24px var(--shadow);
+    background:#fff;
+    z-index:6;
+  }
+  .overlay-switch .seg{
+    appearance:none; border:none; padding:12px 16px; font-weight:800; cursor:pointer;
+    background:#ffffff; color:#333; border-right:1px solid #00000014;
+  }
+  .overlay-switch .seg:last-child{ border-right:none; }
+  .overlay-switch .seg.active{ background:var(--green); color:#19452b; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🎮 แบงค์ ♥ จ๋อม — Wedding Flappy</h1>
+    <div class="card">
+      <canvas id="stage" width="360" height="640" aria-label="Wedding Flappy canvas"></canvas>
+      <div id="modeSwitch" class="overlay-switch" aria-label="สลับโหมดก่อนเริ่ม">
+        <button class="seg" id="modeCasualBtn" type="button">Casual</button>
+        <button class="seg" id="modeEndlessBtn" type="button">Endless</button>
+      </div>
+      <div class="hud">
+        <div class="pill"><strong>สินสอด:</strong> <span id="score" class="pixel pixel-tight">0</span> บาท</div>
+        <button class="btn" id="restartBtn">เริ่มใหม่</button>
+        <button class="btn" id="camBtn">โหมดเห็นหน้า: ปิด</button>
+        <button class="btn" id="recBtn">บันทึก: ปิด</button>
+      </div>
+      <div class="note">แตะหน้าจอหรือกด <strong>Space</strong> เพื่อกระโดด • ผ่าน<strong>ประตูเงิน ประตูทอง</strong>ไปหา <strong>จ๋อม</strong></div>
+      <div class="row note">
+        <span>กติกา: ผ่านประตู <strong>+200,000</strong> • เก็บซองแดง <strong>+50,000</strong> • เก็บดอกไม้ <strong>+20,000</strong> บาท</span>
+      </div>
+      <div class="row note">
+        <span>ธีมสีกลาง: ครีม • ชมพู • เขียว</span>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ----- Config -----
+  const VIRTUAL_W = 360, VIRTUAL_H = 640;
+  const DPR = Math.max(1, Math.floor(window.devicePixelRatio || 1));
+  const GRAVITY = 1800;     // px/s^2 (classic flappy feel)
+  const FLAP = -420;        // px/s upwards impulse
+  const SPEED = 120;        // px/s horizontal scroll (~2px/frame @60fps)
+  const GAP_CASUAL = 210;
+  const GAP_HARD = 170;
+  const GATE_SPACING = 220;
+  const NUM_GATES = 12; // reach the bride after this many gates
+  const GROUND_H = 48;
+
+  // --- Endless mode ramping ---
+  const BASE_SPEED = SPEED;          // px/s base scroll
+const EXTRA_SPEED = 110;           // px/s extra at max difficulty (total up to ~230 px/s)
+  function clamp01(v){ return Math.max(0, Math.min(1, v)); }
+function easeOutQuadFast(t){ return 1 - (1 - t) * (1 - t); }
+function progress01(){
+  // Faster ramp: reach full difficulty by ~35 gates with an ease-out so it gets harder sooner
+  const p = clamp01(passedCount / 35);
+  return easeOutQuadFast(p);
+}
+  function currentSpeed(){
+    if(state.mode==='endless') return BASE_SPEED + progress01()*EXTRA_SPEED;
+    return BASE_SPEED;
+  }
+  function currentGap(){
+    if(state.mode==='endless'){
+      const p = progress01();
+      const minGap = 110; // even tighter at full difficulty
+      return Math.round(GAP_CASUAL - p*(GAP_CASUAL - minGap));
+    }
+    return state.mode==='casual' ? GAP_CASUAL : GAP_HARD; // safety fallback
+  }
+  function currentSpacing(){
+    const p = (state.mode==='endless') ? progress01() : 0;
+    const minSpace = 180; // closer at full difficulty
+    const base = GATE_SPACING; // 220
+    return Math.round(base - p*(base - minSpace));
+  }
+
+  // Scoring rules
+  const DOWRY_PER_GATE = 200000;
+  const BONUS_ENVELOPE = 50000;
+  const BONUS_FLOWER = 20000;
+
+  // Colors
+  const COL = {
+    cream:'#F7E8D9',
+    pink:'#F4B6C2',
+    green:'#A9DDB3',
+    gold:'#D4AF37',
+    silver:'#C0C0C0',
+    deep:'#503A2F',
+    white:'#FFFFFF',
+    leaf:'#7AC597'
+  };
+
+  // ----- Assets (images) -----
+  const groomHead = new Image();
+  groomHead.src = 'groom.png'; // put groom.png next to index.html (transparent PNG recommended)
+
+  // Optional full-body PNG (transparent). If present, this will replace the pixel suit entirely.
+  const groomFull = new Image();
+  groomFull.src = 'groom_full.png'; // put groom_full.png next to index_face.html
+
+  // Visual placement tuning for the full-body PNG (initial guess; tweak to fit your art)
+  const GROOM_VIS = { targetH: 60, offsetX: -18, offsetY: -26 };
+
+  // --- Intro animation helpers (use PNGs when available) ---
+  function drawPNGBottom(img, targetH, leftX, bottomY, mirror){
+    if(!(img && img.complete && img.naturalWidth>0)) return false;
+    const ratio = img.naturalWidth / img.naturalHeight;
+    const h = targetH;
+    const w = Math.round(h * ratio);
+    const dx = mirror ? (leftX + w) : leftX;
+    const sx = mirror ? -w : w;
+    const dy = bottomY - h;
+    ctx.save();
+    ctx.imageSmoothingEnabled = true;
+    if(mirror){ ctx.translate(dx, dy); ctx.scale(-1,1); ctx.drawImage(img, 0, 0, w, h); }
+    else { ctx.drawImage(img, dx, dy, w, h); }
+    ctx.restore();
+    return true;
+  }
+
+  // --- Draw start-name PNG bigger and higher ---
+  // Helper: Draw the couple's names PNG above the mid-panel, scaled up and positioned higher.
+  function drawStartNames(){
+    if(!(startNames && startNames.complete && startNames.naturalWidth>0 && startNames.naturalHeight>0)) return;
+    ctx.save();
+    ctx.imageSmoothingEnabled = false; // keep pixel art crisp even when upscaling
+
+    // Move closer to banner and allow a larger render size
+    const safeTop = 56;                 // was 78 — sit higher
+    const marginX = 6;                  // narrower side padding
+    const maxW = VIRTUAL_W - marginX*2; // fit inside canvas horizontally
+    const maxH = 260;                   // more vertical allowance
+
+    const iw = startNames.naturalWidth;
+    const ih = startNames.naturalHeight;
+
+    // Allow upscaling (pixel-crisp). Prefer integer-ish scale for pixel art.
+    const MAX_SCALE = 2.0; // cap to 2x to avoid overblown
+    const raw = Math.min(maxW/iw, maxH/ih);
+    // snap to 0.5 steps (1.0, 1.5, 2.0) to keep pixels tidy
+    const stepped = Math.max(1, Math.min(MAX_SCALE, Math.round(raw*2)/2));
+
+    const w = Math.round(iw * stepped);
+    const h = Math.round(ih * stepped);
+    const x = Math.round((VIRTUAL_W - w)/2);
+    const y = safeTop; // just under banner
+
+    ctx.globalAlpha = 0.98;
+    ctx.drawImage(startNames, x, y, w, h);
+    ctx.restore();
+  }
+
+  // Optional full-body PNG for bride (transparent). If present, this will replace the pixel bride sprite entirely.
+  const brideFull = new Image();
+  brideFull.src = 'bride_full.png'; // put bride_full.png next to index_face.html
+
+  // Visual placement tuning for the full-body bride PNG (adjust to fit your art)
+  const BRIDE_VIS = { targetH: 66, offsetX: -18, offsetY: -38 };
+
+  // Optional couple photos (transparent PNGs recommended). Place files next to index_face.html
+  // You can provide 1–4 images; missing files will just be skipped at render time.
+  const coupleImgs = ['couple1.png','couple2.png','couple3.png','couple4.png']
+    .map(src => { const im = new Image(); im.src = src; return im; });
+
+  // Envelope item PNG (optional override)
+  const envelopeImg = new Image();
+  envelopeImg.src = 'envelope.png';
+
+  // Flower item PNG (optional override)
+  const flowerImg = new Image();
+  flowerImg.src = 'flower.png';
+
+  // Start screen overlay (couple names / decorative frame)
+  // Place file next to this HTML as: start_names.png
+  const startNames = new Image();
+  startNames.src = 'start_names.png';
+  // Draw start overlay PNG (pixel-art): centered below banner
+  function drawStartNames(){
+    if(!(startNames && startNames.complete && startNames.naturalWidth>0 && startNames.naturalHeight>0)) return;
+    ctx.save();
+    ctx.imageSmoothingEnabled = false; // keep pixel art crisp
+    const safeTop = 60;                 // below banner (banner ~10..78)
+    const marginX = 12;
+    const maxW = VIRTUAL_W - marginX*2; // fit inside canvas horizontally
+    const maxH = 210;                   // vertical space available above mid panel
+    const iw = startNames.naturalWidth;
+    const ih = startNames.naturalHeight;
+    const scale = Math.min(maxW/iw, maxH/ih, 1); // don't upscale beyond 1x
+    const w = Math.round(iw*scale);
+    const h = Math.round(ih*scale);
+    const x = Math.round((VIRTUAL_W - w)/2);
+    const y = safeTop; // sit just under the banner
+    ctx.globalAlpha = 0.98;
+    ctx.drawImage(startNames, x, y, w, h);
+    ctx.restore();
+  }
+
+  // Fixed background image (pixel art full scene)
+  // Place file next to this HTML and name it: bg_wedding.png
+  const bgImage = new Image();
+  bgImage.src = 'bg_wedding.png';
+
+  // Pillar sprite sets (pixel art): gold & silver
+  // Expected files placed next to this HTML:
+  //   pillar_gold_top.png   (width ~40px, height ~16–24px)
+  //   pillar_gold_body.png  (width ~40px, height ~16px or 20px, tile vertically)
+  //   pillar_gold_base.png  (width ~40px, height ~16–24px)
+  //   pillar_silver_top.png
+  //   pillar_silver_body.png
+  //   pillar_silver_base.png
+  const pillar = {
+    gold:  { top:new Image(), body:new Image(), base:new Image() },
+    silver:{ top:new Image(), body:new Image(), base:new Image() }
+  };
+  pillar.gold.top.src   = 'pillar_gold_top.png';
+  pillar.gold.body.src  = 'pillar_gold_body.png';
+  pillar.gold.base.src  = 'pillar_gold_base.png';
+  pillar.silver.top.src  = 'pillar_silver_top.png';
+  pillar.silver.body.src = 'pillar_silver_body.png';
+  pillar.silver.base.src = 'pillar_silver_base.png';
+
+  function imgReady(im){ return !!(im && im.complete && im.naturalWidth>0 && im.naturalHeight>0); }
+  // Draw a vertical pillar column by tiling body and placing base/cap
+  // xCenter: pillar center x on screen; yStart: start y; height: total column height
+  // baseAtStart: place base sprite at yStart (true) or at the end (false)
+  // capAtEnd: place top/cap sprite at the opposite end (near the gap)
+  function drawPillarColumn(set, xCenter, yStart, height, baseAtStart, capAtEnd){
+    const W = 40; // target pillar width in game coords
+    if(height <= 0) return;
+    ctx.save();
+    ctx.imageSmoothingEnabled = false; // keep pixel art crisp
+    let y = yStart;
+    let remain = height;
+
+    const baseH = imgReady(set.base) ? set.base.naturalHeight : 0;
+    const capH  = imgReady(set.top)  ? set.top.naturalHeight  : 0;
+    const bodyH = imgReady(set.body) ? set.body.naturalHeight : 0;
+
+    // Draw base at the designated side if we have room
+    if(baseAtStart && baseH>0 && remain >= baseH){
+      ctx.drawImage(set.base, Math.round(xCenter - W/2), Math.round(y), W, baseH);
+      y += baseH; remain -= baseH;
+    }
+
+    // Reserve space for cap at the far end
+    const capReserve = (capAtEnd && capH>0 && remain > capH) ? capH : 0;
+
+    // Tile body to fill remaining space (excluding reserved cap)
+    if(bodyH > 0){
+      while(remain - capReserve >= bodyH){
+        ctx.drawImage(set.body, Math.round(xCenter - W/2), Math.round(y), W, bodyH);
+        y += bodyH; remain -= bodyH;
+      }
+      // draw partial body if needed
+      if(remain - capReserve > 0){
+        const part = Math.floor(remain - capReserve);
+        if(part > 0){
+          // draw a clipped slice from the body sprite
+          ctx.drawImage(set.body, 0, 0, set.body.naturalWidth, part,
+            Math.round(xCenter - W/2), Math.round(y), W, part);
+          y += part; remain -= part;
+        }
+      }
+    } else {
+      // fallback fill if no body sprite loaded yet
+      ctx.fillStyle = '#cccccc';
+      ctx.fillRect(Math.round(xCenter - W/2), Math.round(y), W, Math.max(0, remain - capReserve));
+      y += Math.max(0, remain - capReserve); remain = capReserve;
+    }
+
+    // Draw cap at the far end
+    if(capAtEnd && capH>0 && remain >= capH){
+      const capY = yStart + height - capH;
+      ctx.drawImage(set.top, Math.round(xCenter - W/2), Math.round(capY), W, capH);
+      remain -= capH;
+    } else if(!baseAtStart && baseH>0 && remain >= baseH){
+      // If base should be at the end (bottom column case)
+      const baseY = yStart + height - baseH;
+      ctx.drawImage(set.base, Math.round(xCenter - W/2), Math.round(baseY), W, baseH);
+      remain -= baseH;
+    }
+    ctx.restore();
+  }
+
+  // ----- Camera (selfie background) -----
+  const camVideo = document.createElement('video');
+  camVideo.autoplay = true; camVideo.playsInline = true; camVideo.muted = true;
+  let camStream = null; let camReady = false;
+  async function startCamera(){
+    try{
+      if(camStream) return; // already on
+      camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio:false });
+      camVideo.srcObject = camStream;
+      camReady = true;
+    }catch(err){
+      console.warn('camera error', err);
+      // gracefully turn off if permission denied
+      state.useCam = false;
+      const btn = document.getElementById('camBtn');
+      if(btn) btn.textContent = 'โหมดเห็นหน้า: ปิด';
+      showBubble('ไม่สามารถเปิดกล้องได้', VIRTUAL_W/2, 120, 'screen');
+    }
+  }
+  function stopCamera(){
+    if(camStream){ camStream.getTracks().forEach(t=>t.stop()); camStream = null; }
+    camVideo.srcObject = null; camReady = false;
+  }
+
+  // ----- Message Presets -----
+  const MSG = {
+    gateBlock: [
+      "เต้นโชว์ก่อน!", "ซองแดงอยู่ไหนคะ?", "กระโดดตบ 50 ครั้ง",
+      "จ่ายน้อยไป ประตูไม่เปิด!!", "พร้อมโอนไหมคะ😆",
+      "ข้อดีของ ‘จ๋อม’ 3 ข้อ!", "ท่องคาถาบูชาเมีย"
+    ],
+    gatePass: [
+      "🎉", "🎊", "🌸", "💖"
+    ],
+    // itemEnvelope removed
+    // itemFlower removed
+    nearBride: [
+      "👰🏻‍♀️ใกล้ถึงแล้ว แบงค์!", "👰🏻‍♀️จ๋อมรออยู่นะ 💕", "👰🏻‍♀️ตื่นเต้นจัง!",
+      "👰🏻‍♀️อีกนิดเดียวถึงจ๋อม!", "👰🏻‍♀️สู้ๆนะ แบงค์!","👰🏻‍♀️พร้อมเข้าประตูวิวาห์",
+    ],
+    gameOver: [
+      "พักหายใจนิด ลุยต่อ!", "รอบหน้าผ่านชัวร์!", "พลาดนิดเดียว! ลองใหม่"
+    ],
+    win: [
+      "ขอให้แบงค์ดูแลจ๋อมด้วยหัวใจเสมอ และจ๋อมเติมพลังใจให้แบงค์ตลอดไป💐",
+      "ขอให้รักนี้งอกงามทุกวัน 💐",
+      "รักมั่นคง ดั่งทองคำคู่ประตูทอง 💛",
+      "รักมากขึ้นทุกวันนะ แบงค์–จ๋อม 💍"
+    ]
+  };
+  function pick(arr){ return arr[Math.floor(Math.random()*arr.length)] }
+
+  // ----- Canvas setup -----
+  const canvas = document.getElementById('stage');
+  const ctx = canvas.getContext('2d');
+  function setupCanvas(){
+    canvas.width = VIRTUAL_W * DPR;
+    canvas.height = VIRTUAL_H * DPR;
+    canvas.style.width = '100%';
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    ctx.imageSmoothingEnabled = false;
+  }
+  setupCanvas();
+
+  // --- Frame timing (for time-based updates) ---
+  let __lastTime = performance.now();
+  let __dtSec = 1/60;   // seconds
+  let __dt60 = 1;       // scaled so 60 FPS -> 1
+
+  // ----- Recording (canvas -> WebM) -----
+  let mediaRecorder = null;
+  let recordedChunks = [];
+  let isRecording = false;
+
+  function getSupportedMime(){
+    const cands = [
+      'video/mp4;codecs=h264',
+      'video/mp4',
+      'video/webm;codecs=vp9',
+      'video/webm;codecs=vp8',
+      'video/webm'
+    ];
+    for(const t of cands){ if(window.MediaRecorder && MediaRecorder.isTypeSupported(t)) return t; }
+    return '';
+  }
+
+  function startRecording(){
+    try{
+      if(isRecording) return;
+      const fps = 30;
+      const stream = canvas.captureStream ? canvas.captureStream(fps) : null;
+      if(!stream || !window.MediaRecorder){
+        showBubble('อุปกรณ์นี้ยังไม่รองรับการบันทึกวิดีโอ', VIRTUAL_W/2, 140, 'screen');
+        return;
+      }
+      recordedChunks = [];
+      const mime = getSupportedMime();
+      const opts = mime ? { mimeType: mime, videoBitsPerSecond: 4_000_000 } : {};
+      mediaRecorder = new MediaRecorder(stream, opts);
+      mediaRecorder.ondataavailable = (e)=>{ if(e.data && e.data.size>0) recordedChunks.push(e.data); };
+      mediaRecorder.onstop = ()=>{
+        try{
+          const type = (mediaRecorder && mediaRecorder.mimeType) || 'video/mp4';
+          const blob = new Blob(recordedChunks, {type});
+          const url = URL.createObjectURL(blob);
+          const ts = new Date().toISOString().replace(/[:.]/g,'-');
+          const isMp4 = /mp4/i.test(type);
+          const ext = isMp4 ? 'mp4' : 'webm';
+          const name = `wedding-flappy_${ts}_${state.phase==='win'?'win':'gameover'}_${state.score}.${ext}`;
+          const a = document.createElement('a');
+          a.href = url; a.download = name; document.body.appendChild(a); a.click();
+          setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 1200);
+          showBubble('บันทึกวิดีโอเสร็จแล้ว ✅', VIRTUAL_W/2, 160, 'screen');
+        }catch(err){ console.warn('save error', err); }
+      };
+      mediaRecorder.start();
+      isRecording = true;
+      showBubble('เริ่มบันทึกวิดีโอ ▶️', VIRTUAL_W/2, 120, 'screen');
+    }catch(err){ console.warn('recorder error', err); }
+  }
+
+  function stopRecording(){
+    try{
+      if(mediaRecorder && isRecording){ mediaRecorder.stop(); }
+    }finally{
+      isRecording = false;
+    }
+  }
+
+  // ----- Game State -----
+  const state = {
+    phase: 'ready', // 'ready' | 'play' | 'gameover' | 'win'
+    score: 0,
+    mode: 'casual', // 'casual' | 'hard'
+    scrollX: 0,
+    flapQueued: false,
+    useCam: false,
+    recArmed: false, // default off: user must enable recording
+    gameOverAt: null,
+    revealScore: false,
+    shownScore: 0,
+    bestEndless: Number(localStorage.getItem('best:endless')||0),
+    newRecord: false,
+    canRestart: false,
+    restartAt: 0,
+  };
+
+  const player = {
+    x: 72, y: VIRTUAL_H*0.5, vy: 0, w: 22, h: 22
+  };
+
+  // Simple counters for breakdown
+  let stats = { gates: 0, envelopes: 0, flowers: 0 };
+
+  // Background clouds (parallax) and ambient petals
+  let clouds = []; // each: {x,y,scale,tint}
+  let ambientPetals = []; // gentle floating pollen-like particles
+
+  // Couple photo "clouds" (very slow parallax behind normal clouds)
+  // each: {x,y,scale,phase,img}
+  let coupleClouds = [];
+
+  function drawRoundedImage(img, x, y, w, h, r, alpha){
+    if(!(img && img.complete && img.naturalWidth>0 && img.naturalHeight>0)) return false;
+    const rr = Math.min(r, w/2, h/2);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.beginPath();
+    ctx.moveTo(x+rr, y);
+    ctx.arcTo(x+w, y, x+w, y+h, rr);
+    ctx.arcTo(x+w, y+h, x, y+h, rr);
+    ctx.arcTo(x, y+h, x, y, rr);
+    ctx.arcTo(x, y, x+w, y, rr);
+    ctx.closePath();
+    ctx.clip();
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(img, x, y, w, h);
+    ctx.restore();
+    return true;
+  }
+
+  function drawCoupleClouds(){
+    const t = performance.now()/1000;
+    for(const c of coupleClouds){
+      const sx = c.x - state.scrollX * 0.08; // very slow parallax
+      if(sx < -160 || sx > VIRTUAL_W + 160) continue;
+      const bob = Math.sin(t*0.9 + c.phase)*6 * c.scale;
+      const w = 84 * c.scale, h = 60 * c.scale; // base card size
+      const x = sx - w/2;
+      const y = c.y + bob - h/2;
+      // soft, rounded photo card with slight transparency
+      drawRoundedImage(c.img, x, y, w, h, 14, 0.82);
+    }
+  }
+
+  function pastel(col, alpha){
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = col;
+  }
+
+  function drawCloud(cx, cy, s, col){
+    ctx.save();
+    pastel(col, 0.85);
+    // simple fluffy cloud with 5 circles
+    const r = 10*s;
+    ctx.beginPath(); ctx.arc(cx - 1.6*r, cy, 0.9*r, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx - 0.6*r, cy - 0.5*r, 1.1*r, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 0.6*r, cy - 0.4*r, 1.0*r, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 1.7*r, cy, 0.8*r, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx, cy + 0.3*r, 1.2*r, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  function drawClouds(){
+    for(const c of clouds){
+      const sx = c.x - state.scrollX * 0.15; // slower than gates & procession
+      if(sx < -120 || sx > VIRTUAL_W + 120) continue;
+      drawCloud(sx, c.y, c.scale, c.tint);
+    }
+  }
+
+  function spawnAmbientPetal(){
+    ambientPetals.push({
+      x: Math.random()*VIRTUAL_W,
+      y: VIRTUAL_H - GROUND_H - 4 - Math.random()*120,
+      vx: (Math.random()-0.5)*0.25,
+      vy: -0.12 - Math.random()*0.12,
+      life: 200 + Math.random()*200,
+      hue: Math.random()<0.5 ? 'rgba(244,182,194,0.6)' : 'rgba(169,221,179,0.6)'
+    });
+  }
+
+  function updateAmbientPetals(){
+    for(const p of ambientPetals){
+      const sway = Math.sin((performance.now()/900) + p.y*0.02) * 0.02;
+      p.x += (p.vx + sway) * __dt60;
+      p.y += p.vy * __dt60;
+      p.life -= __dt60;
+      if(p.x < -10) p.x = VIRTUAL_W + 10; if(p.x > VIRTUAL_W + 10) p.x = -10;
+      if(p.y < 20) { p.y = VIRTUAL_H - GROUND_H - 6; }
+    }
+    // keep population modest
+    const target = 26; // not too many
+    while(ambientPetals.length < target) spawnAmbientPetal();
+    if(ambientPetals.length > 40) ambientPetals.length = 40;
+  }
+
+  function drawAmbientPetals(){
+    ctx.save();
+    for(const p of ambientPetals){
+      ctx.fillStyle = p.hue;
+      // tiny rotated lozenge
+      ctx.translate(p.x, p.y);
+      ctx.rotate( (p.x + p.y) * 0.002 );
+      ctx.fillRect(-1.5, -1.0, 3.0, 2.0);
+      ctx.setTransform(DPR,0,0,DPR,0,0); // reset transform quickly
+    }
+    ctx.restore();
+  }
+  // Gates: array of {x, gapY, type:'gold'|'silver', gap, passed:false, shower:false, open:false, openT:0}
+  let gates = [];
+  // Items: array of {x, y, type:'envelope'|'flower', w, h, collected:false}
+  let items = [];
+  // Endless streaming helpers
+  let lastGateX = 0; // track the last spawned gate world-x
+  function spawnGateAt(x){
+    const type = ((gates.length % 2)===0)? 'silver' : 'gold';
+    const minY = 120, maxY = VIRTUAL_H - 200;
+    const gapYBase = (gates.length? gates[gates.length-1].gapY : VIRTUAL_H*0.5);
+    let gapY = gapYBase + randBetween(-80,80);
+    gapY = Math.max(minY, Math.min(maxY, gapY));
+    const gap = currentGap();
+    const g = {x, gapY, type, gap, passed:false, shower:false, open:false, openT:0};
+    gates.push(g);
+    // maybe spawn 0-2 items around this gap
+    const chance = Math.random();
+    const count = chance < 0.3 ? 2 : (chance < 0.9 ? 1 : 0);
+    for(let k=0;k<count;k++){
+      const kind = (Math.random()<0.5)?'envelope':'flower';
+      const ix = x + 80 + k*24 + randBetween(-6, 6);
+      const iy = gapY + randBetween(-gap*0.35, gap*0.35);
+      items.push({x:ix, y:iy, type:kind, w:14, h:14, collected:false});
+    }
+    lastGateX = x;
+  }
+  function ensureAheadGates(){
+    const SPAWN_AHEAD = 900; // keep ~4 gates ahead
+    while(lastGateX < state.scrollX + SPAWN_AHEAD){
+      spawnGateAt( (lastGateX||320) + currentSpacing() );
+    }
+  }
+  // Floating texts: {x,y,vy,life,text,color}
+  let floats = [];
+  // Petals thrown by bridesmaids: world-coordinates particles
+  // each: {x,y,vx,vy,life,color}
+  let maidPetals = [];
+  let procession = [];
+  // Bride: {x, y}
+  let bride = { x: 0, y: VIRTUAL_H*0.46 };
+
+  // Speech bubbles & contextual messages
+  // bubbles: {text, x, y, anchor:'world'|'screen', t0, life, maxChars}
+  let bubbles = [];
+  // active gate message (typewriter) {gateIndex, text, t0}
+  let gateMsg = null;
+let nearBrideShown = false;
+let passedCount = 0;
+let gameOverLine = null, winLine = null;
+let winsCount = 0;
+
+  // ----- Helpers -----
+  function randBetween(a,b){ return a + Math.random()*(b-a); }
+  function fmt(n){ try { return n.toLocaleString('th-TH'); } catch { return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g,","); } }
+
+  function worldXToScreen(x){ return x - state.scrollX; }
+
+  function showBubble(text, x, y, anchor, align){
+    bubbles.push({ text, x, y, anchor: anchor||'world', t0: performance.now(), life: 120, maxChars: text.length, align: align||null });
+  }
+
+  function drawSpeechBubble(text, sx, sy, align){
+    ctx.save();
+    ctx.font = 'bold 12px system-ui, -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    // simple wrap to 2 lines
+    const maxW = 160;
+    const words = text.split(' ');
+    let line = '', lines = [];
+    for(let i=0;i<words.length;i++){
+      const tl = line + (line? ' ':'') + words[i];
+      if(ctx.measureText(tl).width > maxW && line){ lines.push(line); line = words[i]; }
+      else line = tl;
+    }
+    if(line) lines.push(line);
+    if(lines.length>2) lines = [lines.slice(0,2).join(' ')];
+    const w = Math.min(maxW, Math.max(80, Math.max(...lines.map(l=>ctx.measureText(l).width)) + 24));
+    const h = 12 + lines.length*16 + 10;
+    // if align right, clamp bubble to right edge with small margin
+    if(align === 'right'){
+      sx = Math.min(sx, VIRTUAL_W - (w/2 + 12));
+    }
+    // bubble
+    ctx.globalAlpha = 0.92;
+    ctx.fillStyle = '#ffffffcc';
+    roundRect(ctx, sx - w/2, sy - h/2, w, h, 10); ctx.fill();
+    ctx.globalAlpha = 1; ctx.strokeStyle = '#00000016'; ctx.stroke();
+    ctx.fillStyle = '#333';
+    for(let i=0;i<lines.length;i++) ctx.fillText(lines[i], sx, sy - (lines.length-1)*8 + i*16);
+    ctx.restore();
+  }
+
+  function drawBubbles(){
+    const now = performance.now();
+    bubbles = bubbles.filter(b=> (now - b.t0) < b.life*16.7);
+    for(const b of bubbles){
+      const elapsed = now - b.t0; // ms
+      const chars = Math.max(1, Math.min(b.maxChars, Math.floor(elapsed/35))); // typewriter ~35ms/char
+      const txt = b.text.slice(0, chars);
+      const sx = b.anchor==='world' ? worldXToScreen(b.x) : b.x;
+      const sy = b.y;
+      if(sx < -60 || sx > VIRTUAL_W+60) continue;
+      drawSpeechBubble(txt, sx, sy, b.align);
+    }
+  }
+  function setScoreLabel(){ document.getElementById('score').textContent = fmt(state.score); }
+
+  function reset(levelMode){
+    stopRecording();
+    state.phase = 'ready';
+    state.score = 0;
+    state.scrollX = 0;
+    state.mode = levelMode || 'casual';
+    player.x = 72;
+    player.y = VIRTUAL_H*0.5;
+    player.vy = 0;
+    gates = [];
+    items = [];
+    floats = [];
+    maidPetals = [];
+    procession = [];
+    bubbles = [];
+    gateMsg = null;
+    nearBrideShown = false;
+    passedCount = 0;
+    gameOverLine = null; winLine = null;
+    clouds = [];
+    ambientPetals = [];
+    coupleClouds = [];
+    stats = { gates: 0, envelopes: 0, flowers: 0 };
+    state.gameOverAt = null;
+    state.revealScore = false;
+    state.shownScore = 0;
+    state.newRecord = false;
+    state.canRestart = false;
+    state.restartAt = 0;
+    let x = 320;
+    let lastGapY = VIRTUAL_H*0.5;
+    if(state.mode==='endless'){
+      // start with a few gates then stream
+      gates = []; items = []; lastGateX = 0;
+      for(let i=0;i<6;i++){
+        const gap = currentGap();
+        const type = (i%2===0)?'silver':'gold';
+        const minY = 120, maxY = VIRTUAL_H - 200;
+        let gapY = lastGapY + randBetween(-80, 80);
+        gapY = Math.max(minY, Math.min(maxY, gapY));
+        lastGapY = gapY;
+        gates.push({x, gapY, type, gap, passed:false, shower:false, open:false, openT:0});
+        // light items
+        const chance = Math.random();
+        const count = chance < 0.4 ? 1 : 0;
+        for(let k=0;k<count;k++){
+          const kind = (Math.random()<0.5)?'envelope':'flower';
+          const ix = x + 80 + k*24 + randBetween(-6, 6);
+          const iy = gapY + randBetween(-gap*0.35, gap*0.35);
+          items.push({x:ix, y:iy, type:kind, w:14, h:14, collected:false});
+        }
+        lastGateX = x;
+        x += currentSpacing();
+      }
+      bride.x = Infinity; // no win in endless
+    } else {
+      const gapSize = GAP_CASUAL;
+      for(let i=0;i<NUM_GATES;i++){
+        const type = (i%2===0)?'silver':'gold';
+        const minY = 120, maxY = VIRTUAL_H - 200;
+        let gapY = lastGapY + randBetween(-80, 80);
+        gapY = Math.max(minY, Math.min(maxY, gapY));
+        lastGapY = gapY;
+        gates.push({x, gapY, type, gap: gapSize, passed:false, shower:false, open:false, openT:0});
+        const chance = Math.random();
+        const count = chance < 0.3 ? 2 : (chance < 0.9 ? 1 : 0);
+        for(let k=0;k<count;k++){
+          const kind = (Math.random()<0.5)?'envelope':'flower';
+          const ix = x + 80 + k*24 + randBetween(-6, 6);
+          const iy = gapY + randBetween(-gapSize*0.35, gapSize*0.35);
+          items.push({x:ix, y:iy, type:kind, w:14, h:14, collected:false});
+        }
+        x += GATE_SPACING;
+      }
+      bride.x = (gates.length? gates[gates.length-1].x : 1200) + 260;
+    }
+    bride.y = VIRTUAL_H*0.46;
+    // --- Background procession (ขบวนขันหมาก) ---
+    const worldEnd = (state.mode==='endless') ? (state.scrollX + 1800) : (bride.x + 200);
+    for(let px = 80; px < worldEnd; px += 140){
+      const r = Math.random();
+      const kind = r < 0.33 ? 'drum' : (r < 0.66 ? 'umbrella' : 'tray');
+      const oy = VIRTUAL_H - GROUND_H - 26 + randBetween(-4, 2);
+      procession.push({ x: px + randBetween(-20, 20), y: oy, kind });
+    }
+    // --- Couple photo parallax (3–4 cards spread along the world) ---
+    const usableImgs = coupleImgs.filter(im => !!im); // load state checked at draw time
+    const N = Math.min(4, Math.max(3, usableImgs.length));
+    for(let i=0;i<N;i++){
+      const frac = (i+1)/(N+1);
+      const cx = worldEnd * frac + randBetween(-60,60);
+      coupleClouds.push({
+        x: cx,
+        y: 160 + Math.random()*120, // mid sky, below top banner
+        scale: 0.9 + Math.random()*0.4,
+        phase: Math.random()*Math.PI*2,
+        img: usableImgs[i % usableImgs.length]
+      });
+    }
+    // Ensure at least one early couple photo appears soon after the first gate
+    if (gates.length && usableImgs.length) {
+      coupleClouds.push({
+        x: gates[0].x + 120,   // show shortly after gate #1
+        y: 170 + Math.random()*60,
+        scale: 1.0,
+        phase: Math.random()*Math.PI*2,
+        img: usableImgs[0]
+      });
+    }
+    // --- Sky clouds (pastel) spaced along the world ---
+    const pastelPalette = ['#ffffff','rgba(255,247,250,0.95)','rgba(247,232,217,0.95)'];
+    for(let cx = -80; cx < worldEnd; cx += 180 + Math.random()*120){
+      clouds.push({
+        x: cx + Math.random()*40,
+        y: 120 + Math.random()*120, // lower clouds (120–240px from top)
+        scale: 0.8 + Math.random()*1.1,
+        tint: pastelPalette[Math.floor(Math.random()*pastelPalette.length)]
+      });
+    }
+    // seed ambient petals
+    for(let i=0;i<22;i++) spawnAmbientPetal();
+    setScoreLabel();
+  }
+
+  reset('casual');
+
+  // ----- Input -----
+  function queueFlap(){
+    state.flapQueued = true;
+    if(state.phase==='ready'){
+      state.phase='play';
+      if(state.recArmed && !isRecording){ startRecording(); }
+    } else if(state.phase==='gameover'){
+      // Prevent restart until canRestart is true
+      if(state.canRestart){ reset(state.mode); }
+      // else: ignore taps until reveal+count finished
+    } else if(state.phase==='win'){
+      reset(state.mode);
+    }
+  }
+  window.addEventListener('keydown', (e)=>{
+    if(e.code==='Space'){ e.preventDefault(); queueFlap(); }
+    if(e.key==='e' || e.key==='E'){
+      // allow toggle only when in menus AND not locked
+      const inMenu = (state.phase==='ready') || (state.phase==='win') || (state.phase==='gameover' && state.canRestart);
+      if(inMenu){
+        state.mode = (state.mode==='casual') ? 'endless' : 'casual';
+        reset(state.mode);
+        updateModeSwitchUI();
+      }
+    }
+  }, {passive:false});
+  canvas.addEventListener('mousedown', queueFlap);
+  canvas.addEventListener('touchstart', (e)=>{ e.preventDefault(); queueFlap(); }, {passive:false});
+  document.getElementById('restartBtn').addEventListener('click', ()=>{
+    // block restarts during gameover lock window
+    if(state.phase==='gameover' && !state.canRestart) return;
+    // otherwise allow (ready/win or unlocked gameover)
+    if(state.phase!=='play') reset(state.mode);
+  });
+  const camBtn = document.getElementById('camBtn');
+  camBtn.addEventListener('click', async ()=>{
+    state.useCam = !state.useCam;
+    camBtn.textContent = state.useCam ? 'โหมดเห็นหน้า: เปิด' : 'โหมดเห็นหน้า: ปิด';
+    if(state.useCam){ await startCamera(); }
+    else { stopCamera(); }
+  });
+
+
+  // --- Centered pre-start mode switch ---
+  const modeSwitch = document.getElementById('modeSwitch');
+  const btnCasual = document.getElementById('modeCasualBtn');
+  const btnEndless = document.getElementById('modeEndlessBtn');
+
+  function setModeAndReset(m){
+    if(state.phase==='ready'){
+      if(state.mode !== m){ state.mode = m; reset(state.mode); }
+      updateModeSwitchUI();
+    }
+  }
+  function updateModeSwitchUI(){
+    // show only when not playing (focus: before start)
+    modeSwitch.style.display = (state.phase==='ready') ? 'flex' : 'none';
+    btnCasual.classList.toggle('active', state.mode==='casual');
+    btnEndless.classList.toggle('active', state.mode==='endless');
+  }
+  btnCasual.addEventListener('click', ()=> setModeAndReset('casual'));
+  btnEndless.addEventListener('click', ()=> setModeAndReset('endless'));
+
+  // --- Recording toggle button ---
+  const recBtn = document.getElementById('recBtn');
+  function updateRecLabel(){
+    if(isRecording){
+      recBtn.textContent = 'กำลังบันทึก… คลิกเพื่อหยุด';
+      recBtn.classList.add('active');
+    }else{
+      recBtn.textContent = 'บันทึก: ' + (state.recArmed ? 'เปิด' : 'ปิด');
+      recBtn.classList.toggle('active', state.recArmed);
+    }
+  }
+  recBtn.addEventListener('click', ()=>{
+    if(state.phase==='play'){
+      // During play: click toggles live recording immediately
+      if(isRecording){ stopRecording(); }
+      else { state.recArmed = true; startRecording(); }
+    }else{
+      // In menus/ready: toggle arming
+      state.recArmed = !state.recArmed;
+    }
+    updateRecLabel();
+  });
+
+  // ----- Physics & Collision -----
+  function aabb(ax,ay,aw,ah, bx,by,bw,bh){
+    return ax < bx+bw && ax+aw > bx && ay < by+bh && ay+ah > by;
+  }
+
+  function addFloat(x,y,text,color){
+    floats.push({x,y,vy:-0.6,life:60,text,color});
+  }
+
+  function spawnMaidShower(gate){
+    // spawn petals from inside the gap (two clusters near center, left/right of the ribbon)
+    const sxL = gate.x - 8;
+    const sxR = gate.x + 8;
+    const syTop = gate.gapY - 10;
+    const syBot = gate.gapY + 10;
+    const N = 28;
+    for(let i=0;i<N;i++){
+      maidPetals.push({
+        x: sxL + randBetween(-2,2),
+        y: syTop + randBetween(-6,6),
+        vx: randBetween(-0.6, 0.6),
+        vy: randBetween(-2.2,-0.8),
+        life: 110 + Math.random()*40,
+        color: (Math.random()<0.7)?COL.pink:COL.green
+      });
+      maidPetals.push({
+        x: sxR + randBetween(-2,2),
+        y: syBot + randBetween(-6,6),
+        vx: randBetween(-0.6, 0.6),
+        vy: randBetween(-2.2,-0.8),
+        life: 110 + Math.random()*40,
+        color: (Math.random()<0.7)?COL.pink:COL.green
+      });
+    }
+  }
+
+  function startGameOver(){
+    if(state.phase==='gameover') return;
+    state.phase = 'gameover';
+    stopRecording();
+    state.gameOverAt = performance.now();
+    state.revealScore = false;
+    state.shownScore = 0;
+    // Prevent accidental restart during lock window
+    state.canRestart = false;
+    state.restartAt = state.gameOverAt + REVEAL_DELAY + COUNT_DURATION + RESTART_EXTRA_DELAY;
+    // Handle endless best/new record flag
+    if(state.mode==='endless'){
+      if(state.score > state.bestEndless){
+        state.bestEndless = state.score;
+        state.newRecord = true;
+        try{ localStorage.setItem('best:endless', String(state.bestEndless)); }catch{}
+      }
+    }
+  }
+
+  function update(){
+    if(state.phase==='play'){
+      updateAmbientPetals();
+      // Flappy style: FLAP is an instantaneous vertical velocity in px/s
+      if(state.flapQueued){ player.vy = FLAP; state.flapQueued = false; }
+      player.vy += GRAVITY * __dtSec;    // a = GRAVITY (px/s^2)
+      player.y  += player.vy * __dtSec;  // integrate velocity (px/s)
+      state.scrollX += currentSpeed() * __dtSec; // scroll at px/s
+
+      if(player.y < 0){ player.y = 0; player.vy = 0; }
+      if(player.y + player.h > VIRTUAL_H - GROUND_H){
+        player.y = VIRTUAL_H - GROUND_H - player.h;
+        startGameOver();
+        if(!gameOverLine) gameOverLine = pick(MSG.gameOver);
+      }
+
+      for(const g of gates){
+        const onScreenX = g.x - state.scrollX;
+        // Gate keepers: block first, then open as the groom approaches
+        if(!g.open && (player.x + 14) > (onScreenX - 36)){
+          g.open = true; // trigger opening when near
+        }
+        if(g.open && g.openT < 1){
+          g.openT = Math.min(1, g.openT + 0.08 * __dt60); // 0.08 per 60-fps frame
+        }
+        const topRect = {x:onScreenX-20, y:0, w:40, h:g.gapY - g.gap/2};
+        const botRect = {x:onScreenX-20, y:g.gapY + g.gap/2, w:40, h:VIRTUAL_H - GROUND_H - (g.gapY + g.gap/2)};
+        if(aabb(player.x, player.y, player.w, player.h, topRect.x, topRect.y, topRect.w, topRect.h) ||
+           aabb(player.x, player.y, player.w, player.h, botRect.x, botRect.y, botRect.w, botRect.h)){
+          startGameOver();
+          if(!gameOverLine) gameOverLine = pick(MSG.gameOver);
+        }
+        if(!g.passed && onScreenX + 20 < player.x){
+          g.passed = true;
+          passedCount += 1;
+          stats.gates += 1;
+          state.score += DOWRY_PER_GATE;
+          setScoreLabel();
+          addFloat(player.x+8, player.y-10, `+${fmt(DOWRY_PER_GATE)}`, '#1b5e20');
+          // bubble from bridesmaids when passed
+          showBubble(pick(MSG.gatePass), g.x, g.gapY - 34, 'world');
+          if(!g.shower){ g.shower = true; spawnMaidShower(g); }
+          // clear gate message once passed
+          if(gateMsg && gateMsg.gateIndex === gates.indexOf(g)) gateMsg = null;
+        }
+      }
+
+      for(const it of items){
+        if(it.collected) continue;
+        const onScreenX = it.x - state.scrollX;
+        if(onScreenX < -30 || onScreenX > VIRTUAL_W + 30) continue;
+        if(aabb(player.x, player.y, player.w, player.h, onScreenX-7, it.y-7, it.w, it.h)){
+          it.collected = true;
+          const val = it.type==='envelope' ? BONUS_ENVELOPE : BONUS_FLOWER;
+          if(it.type==='envelope') stats.envelopes += 1; else stats.flowers += 1;
+          state.score += val;
+          setScoreLabel();
+          addFloat(player.x+8, player.y-14, `+${fmt(val)}`, it.type==='envelope' ? '#8b0000' : '#2e7d32');
+        }
+      }
+
+      if(state.mode!=='endless'){
+        const brideOnScreenX = bride.x - state.scrollX;
+        if(brideOnScreenX < player.x + 10){
+          const goal = {x: brideOnScreenX-10, y: bride.y-24, w: 40, h: 60};
+          if(aabb(player.x, player.y, player.w, player.h, goal.x, goal.y, goal.w, goal.h)){
+            state.phase = 'win';
+            stopRecording();
+            if(!winLine) {
+              winLine = (winsCount === 0) ? MSG.win[0] : pick(MSG.win);
+            }
+            winsCount += 1;
+          }
+        }
+      }
+
+      if(state.mode==='endless'){
+        ensureAheadGates();
+        // drop off-screen passed gates & items to keep arrays light
+        gates = gates.filter(g=> (g.x - state.scrollX) > -120);
+        items = items.filter(it=> (it.x - state.scrollX) > -80 && !it.collected);
+      }
+
+      const gacc = 0.05; // per 60-fps frame
+      for(const p of maidPetals){
+        p.vy += gacc * __dt60;
+        p.x  += p.vx * __dt60;
+        p.y  += p.vy * __dt60;
+        p.life -= __dt60;
+      }
+      maidPetals = maidPetals.filter(p => p.life > 0 && p.y < VIRTUAL_H - 2);
+
+      for(const f of floats){ f.y += f.vy * __dt60; f.life -= __dt60; }
+      floats = floats.filter(f=>f.life>0);
+    }
+    if(state.phase!=='play') updateAmbientPetals();
+  }
+
+  function updateGateMessage(){
+    // find nearest upcoming, not-passed gate
+    let idx = -1;
+    for(let i=0;i<gates.length;i++){
+      const g = gates[i];
+      const sx = g.x - state.scrollX;
+      if(!g.passed && sx + 10 > player.x){ idx = i; break; }
+    }
+    if(idx === -1){ gateMsg = null; return; }
+    const now = performance.now();
+    if(!gateMsg || gateMsg.gateIndex !== idx){
+      gateMsg = { gateIndex: idx, text: pick(MSG.gateBlock), t0: now };
+    }
+  }
+
+  function drawGateMessage(){
+    if(!gateMsg) return;
+    const g = gates[gateMsg.gateIndex];
+    const sx = g.x - state.scrollX;
+    if(sx < -40 || sx > VIRTUAL_W+40) return;
+    const now = performance.now();
+    const chars = Math.max(1, Math.min(gateMsg.text.length, Math.floor((now - gateMsg.t0)/35)));
+    const txt = gateMsg.text.slice(0, chars);
+    drawSpeechBubble(txt, sx, g.gapY - 48);
+  }
+
+  // ----- Rendering -----
+  function easeOutQuad(t){ return 1 - (1-t)*(1-t); }
+  // Game Over timing (ms)
+const REVEAL_DELAY = 700;       // ก่อนโชว์กล่องคะแนน (เดิม 900)
+const COUNT_DURATION = 600;     // ระยะนับคะแนนแบบ count-up (เดิม 800)
+const RESTART_EXTRA_DELAY = 150; // บัฟเฟอร์ก่อนยอมรับรีสตาร์ท (เดิม 300)
+
+  function drawGameOverPanel(){
+    const now = performance.now();
+    const elapsed = state.gameOverAt ? (now - state.gameOverAt) : 0;
+    const revealDelay = REVEAL_DELAY;
+    const countDuration = COUNT_DURATION;
+    const reveal = elapsed >= revealDelay;
+
+    // Dim background & card base
+    ctx.save();
+    ctx.fillStyle = '#00000055';
+    ctx.fillRect(0,0,VIRTUAL_W,VIRTUAL_H);
+    ctx.fillStyle = COL.white;
+    ctx.fillRect(24, 120, VIRTUAL_W-48, 320);
+    ctx.strokeStyle = '#00000020';
+    ctx.strokeRect(24, 120, VIRTUAL_W-48, 320);
+
+    ctx.textAlign = 'center';
+
+    if(!reveal){
+      // Reassuring message first
+      ctx.fillStyle = COL.deep;
+      ctx.font = 'bold 20px system-ui, -apple-system, sans-serif';
+      ctx.fillText(gameOverLine || 'พักหายใจก่อน รอบหน้าผ่านชัวร์! 😄', VIRTUAL_W/2, 200);
+      ctx.font = '14px system-ui, -apple-system, sans-serif';
+      ctx.fillStyle = '#666';
+      ctx.fillText('กำลังเตรียมสรุปคะแนน…', VIRTUAL_W/2, 240);
+    } else {
+      // Reveal score with count-up and breakdown
+      ctx.fillStyle = COL.deep;
+      ctx.font = 'bold 18px system-ui, -apple-system, sans-serif';
+      ctx.fillText('สรุปคะแนน', VIRTUAL_W/2, 156);
+
+      // Breakdown rows
+      const rowX = 64; const rowY0 = 188; const rowH = 28; const rowW = VIRTUAL_W - 128;
+      ctx.textAlign = 'left';
+      ctx.font = '14px system-ui, -apple-system, sans-serif';
+      const b1 = `ประตู × ${stats.gates}`;
+      const b2 = `ซองแดง × ${stats.envelopes}`;
+      const b3 = `ดอกไม้ × ${stats.flowers}`;
+      ctx.fillText(b1, rowX, rowY0 + 0*rowH);
+      ctx.fillText(b2, rowX, rowY0 + 1*rowH);
+      ctx.fillText(b3, rowX, rowY0 + 2*rowH);
+      ctx.textAlign = 'right';
+      ctx.fillText('+'+fmt(stats.gates * DOWRY_PER_GATE), rowX + rowW, rowY0 + 0*rowH);
+      ctx.fillText('+'+fmt(stats.envelopes * BONUS_ENVELOPE), rowX + rowW, rowY0 + 1*rowH);
+      ctx.fillText('+'+fmt(stats.flowers * BONUS_FLOWER), rowX + rowW, rowY0 + 2*rowH);
+
+      // Total with count-up
+      const t = Math.min(1, (elapsed - revealDelay) / countDuration);
+      const eased = easeOutQuad(t);
+      state.shownScore = Math.floor(state.score * eased);
+      const totalText = `รวม: ${fmt(state.shownScore)} บาท`;
+      ctx.textAlign = 'center';
+      ctx.font = '16px "Press Start 2P", ui-monospace, monospace';
+      ctx.fillStyle = '#00000022';
+      ctx.fillText(totalText, VIRTUAL_W/2, 290 + 1.5);
+      ctx.fillStyle = COL.deep;
+      ctx.fillText(totalText, VIRTUAL_W/2, 290);
+
+      // Endless best & badge
+      if(state.mode==='endless'){
+        ctx.font = '12px system-ui, -apple-system, sans-serif';
+        ctx.fillStyle = '#444';
+        ctx.fillText('สถิติสูงสุด (เครื่องนี้): ' + fmt(state.bestEndless), VIRTUAL_W/2, 318);
+        if(state.newRecord){
+          ctx.fillStyle = '#d32f2f';
+          ctx.font = 'bold 12px system-ui, -apple-system, sans-serif';
+          ctx.fillText('★ New Record! ★', VIRTUAL_W/2, 340);
+        }
+      }
+
+      // Hint to restart (only when input is unlocked)
+if(state.canRestart){
+  ctx.fillStyle = '#666';
+  ctx.font = '12px system-ui, -apple-system, sans-serif';
+  ctx.fillText('แตะจอ/กด Space เพื่อเริ่มใหม่', VIRTUAL_W/2, 360);
+}
+    }
+
+    ctx.restore();
+
+    // Update state flag after drawing once past delay
+    if(elapsed >= revealDelay) state.revealScore = true;
+    if(!state.canRestart && now >= state.restartAt){
+      state.canRestart = true;
+    }
+  }
+  function clear(){
+    if(state.useCam && camReady && camVideo.readyState >= 2){
+      // draw live camera as background (selfie mirror)
+      ctx.save();
+      ctx.scale(-1, 1);
+      ctx.drawImage(camVideo, -VIRTUAL_W, 0, VIRTUAL_W, VIRTUAL_H);
+      ctx.restore();
+      // soft overlay gradient to keep UI readable
+      const g = ctx.createLinearGradient(0,0,0,VIRTUAL_H);
+      g.addColorStop(0, 'rgba(247,232,217,0.35)');
+      g.addColorStop(1, 'rgba(255,255,255,0.35)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0,0,VIRTUAL_W,VIRTUAL_H);
+    } else {
+      // Fixed BG image (pixel art). If not yet loaded, fall back to gradient.
+      const ready = bgImage && bgImage.complete && bgImage.naturalWidth>0;
+      if(ready){
+        ctx.save();
+        ctx.imageSmoothingEnabled = false; // keep pixel art crisp
+        ctx.drawImage(bgImage, 0, 0, VIRTUAL_W, VIRTUAL_H);
+        ctx.restore();
+      } else {
+        const g = ctx.createLinearGradient(0,0,0,VIRTUAL_H);
+        g.addColorStop(0, COL.cream);
+        g.addColorStop(1, '#FFFFFF');
+        ctx.fillStyle = g;
+        ctx.fillRect(0,0,VIRTUAL_W,VIRTUAL_H);
+      }
+    }
+    // No more old green parallax stripes over the BG
+  }
+
+  function drawParallax(){
+    ctx.fillStyle = COL.green;
+    for(let i=0;i<3;i++){
+      const baseY = 420 + i*22;
+      ctx.fillRect(-100 + (i*120) - (state.scrollX*0.2 % 240), baseY, 240, 10);
+      ctx.fillRect(40 + (i*140) - (state.scrollX*0.25 % 280), baseY+16, 260, 10);
+    }
+  }
+
+  function drawGround(){
+    ctx.fillStyle = COL.pink;
+    ctx.fillRect(0, VIRTUAL_H - GROUND_H, VIRTUAL_W, GROUND_H);
+    ctx.fillStyle = '#00000014';
+    ctx.fillRect(0, VIRTUAL_H - GROUND_H, VIRTUAL_W, 2);
+  }
+
+  function drawGate(g){
+    const onScreenX = g.x - state.scrollX;
+    const gapY = g.gapY, gap = g.gap;
+    const innerTop = gapY - gap/2;
+    const innerBot = gapY + gap/2;
+
+    const set = (g.type==='gold') ? pillar.gold : pillar.silver;
+    const spritesReady = imgReady(set.top) && imgReady(set.body) && imgReady(set.base);
+
+    if(spritesReady){
+      // TOP column: from screen top (y=0) down to innerTop; base at top, cap at gap edge
+      drawPillarColumn(set, onScreenX, 0, Math.max(0, innerTop), /*baseAtStart*/true, /*capAtEnd*/true);
+      // BOTTOM column: from innerBot down to ground; cap at gap edge, base at ground
+      const bottomH = Math.max(0, (VIRTUAL_H - GROUND_H) - innerBot);
+      drawPillarColumn(set, onScreenX, innerBot, bottomH, /*baseAtStart*/false, /*capAtEnd*/true);
+    } else {
+      // Fallback: simple rectangles (previous style)
+      const color = g.type==='gold' ? COL.gold : COL.silver;
+      ctx.fillStyle = color;
+      ctx.fillRect(onScreenX-20, 0, 40, innerTop);
+      ctx.fillRect(onScreenX-20, innerBot, 40, (VIRTUAL_H - GROUND_H) - innerBot);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(onScreenX-20, innerTop - 6, 40, 6);
+      ctx.fillRect(onScreenX-20, innerBot, 40, 6);
+      ctx.fillStyle = g.type==='gold' ? '#ffe9a6' : '#e7ebf6';
+      for(let i=0;i<5;i++){
+        ctx.fillRect(onScreenX-18 + i*7, innerTop - 4, 3,3);
+        ctx.fillRect(onScreenX-18 + i*7, innerBot + 1, 3,3);
+      }
+    }
+  }
+
+  function drawAllGates(){
+    for(const g of gates){
+      const onScreenX = g.x - state.scrollX;
+      if(onScreenX < -60 || onScreenX > VIRTUAL_W + 60) continue;
+      drawGate(g);
+
+      // Bridesmaids block vertically inside the gap, then slide up/down as it opens
+      const innerTop = g.gapY - g.gap/2;
+      const innerBot = g.gapY + g.gap/2;
+      const clearance = 14; // keep within gap edges
+      const offset = ((g.gap/2) - clearance) * g.openT; // 0 -> at center, 1 -> near edges
+      const maidXLeft  = onScreenX - 10;
+      const maidXRight = onScreenX + 6;
+      const baseY = g.gapY - 22; // sprite top-left near gap center
+
+      // top maid moves upward, bottom maid moves downward
+      drawMaid(maidXLeft,  baseY - offset, 2, g.open, false);
+      drawMaid(maidXRight, baseY + offset, 2, g.open,  true);
+
+      // Vertical ribbon in the middle that retracts up/down
+      drawGateRibbon(g);
+    }
+  }
+
+  function drawGateRibbon(g){
+    const onScreenX = g.x - state.scrollX;
+    const innerTop = g.gapY - g.gap/2;
+    const innerBot = g.gapY + g.gap/2;
+    const centerY  = g.gapY;
+    const width = 6; // ribbon thickness
+    const halfLen = Math.max(0, (innerBot - innerTop)/2 * (1 - g.openT));
+    if(halfLen <= 0.5) return;
+
+    ctx.save();
+    ctx.fillStyle = '#d47fa6'; // pink ribbon
+    // upper vertical segment
+    ctx.fillRect(onScreenX - width/2, centerY - halfLen, width, halfLen);
+    // lower vertical segment
+    ctx.fillRect(onScreenX - width/2, centerY, width, halfLen);
+    // center knot
+    ctx.fillStyle = COL.gold;
+    ctx.fillRect(onScreenX - 3, centerY - 3, 6, 6);
+    ctx.restore();
+  }
+  function drawProcession(){
+    for(const p of procession){
+      const x = p.x - state.scrollX * 0.6; // parallax behind gameplay
+      if(x < -40 || x > VIRTUAL_W + 40) continue;
+      if(p.kind === 'drum')      drawPersonDrum(x, p.y, 2);
+      else if(p.kind === 'umbrella') drawPersonUmbrella(x, p.y, 2);
+      else                       drawPersonTray(x, p.y, 2);
+    }
+  }
+
+  function drawPersonBase(x,y,scale,bodyCol){
+    const s = scale||2;
+    // head
+    drawPixel(ctx, x+3*s, y+0*s, s, '#3b2d2a');
+    for(let i=2;i<=6;i++) drawPixel(ctx, x+i*s, y+1*s, s, '#F7D7C3');
+    for(let i=2;i<=6;i++) drawPixel(ctx, x+i*s, y+2*s, s, '#F7D7C3');
+    drawPixel(ctx, x+3*s, y+2*s, s, '#000');
+    drawPixel(ctx, x+5*s, y+2*s, s, '#000');
+    // body
+    for(let r=3;r<=7;r++){ for(let c=2;c<=6;c++){ drawPixel(ctx, x+c*s, y+r*s, s, bodyCol); } }
+  }
+
+  function drawPersonDrum(x,y,scale){
+    const s = scale||2;
+    drawPersonBase(x,y,scale, COL.green);
+    // drum (gold) at front
+    drawPixel(ctx, x+7*s, y+5*s, s, COL.gold);
+    drawPixel(ctx, x+8*s, y+5*s, s, COL.gold);
+    drawPixel(ctx, x+7*s, y+6*s, s, '#b8922a');
+  }
+
+  function drawPersonUmbrella(x,y,scale){
+    const s = scale||2;
+    drawPersonBase(x,y,scale, '#9ec9ff');
+    // umbrella canopy
+    for(let i=-2;i<=2;i++) drawPixel(ctx, x+4*s + i*s, y-2*s, s, '#ffcad4');
+    drawPixel(ctx, x+4*s, y-1*s, s, '#ffcad4');
+    // pole
+    for(let r=-1;r<=3;r++) drawPixel(ctx, x+4*s, y+r*s, s, '#8b5e3c');
+  }
+
+  function drawPersonTray(x,y,scale){
+    const s = scale||2;
+    drawPersonBase(x,y,scale, '#ffd28a');
+    // tray with gold items
+    for(let i=0;i<=4;i++) drawPixel(ctx, x+2*s + i*s, y+4*s, s, '#cfa34a');
+    drawPixel(ctx, x+3*s, y+3*s, s, '#ffd98e');
+  }
+
+  // 8-bit pixels
+  function drawPixel(ctx, x, y, s, col){ ctx.fillStyle = col; ctx.fillRect(Math.round(x), Math.round(y), s, s); }
+
+  function drawGroom(x,y,scale){
+    const s = scale||2;
+    const skin = '#F7D7C3', hair='#3b2d2a', suit='#2b2b2b', shirt='#FFFFFF', tie=COL.pink;
+    let px = x, py = y;
+
+    // --- Preferred: draw full-body PNG if available ---
+    if (groomFull && groomFull.complete && groomFull.naturalWidth > 0) {
+      ctx.save();
+      ctx.imageSmoothingEnabled = true; // keep photo/vector PNG smooth
+      // Keep gameplay collision the same; this is visual-only. Position using offsets.
+      const h = GROOM_VIS.targetH; // target visual height in pixels
+      const ratio = groomFull.naturalWidth / groomFull.naturalHeight;
+      const w = Math.round(h * ratio);
+      const dx = px + GROOM_VIS.offsetX; // tune these to align with player box
+      const dy = py + GROOM_VIS.offsetY;
+      ctx.drawImage(groomFull, dx, dy, w, h);
+      ctx.restore();
+      return; // skip pixel body entirely
+    }
+
+    // --- Fallback 1: real head image + pixel body (old behavior) ---
+    if (groomHead && groomHead.complete) {
+      ctx.save();
+      ctx.imageSmoothingEnabled = true; // smooth photo head only
+      const cx = px + 7*s;     // head center approx in current sprite grid
+      const cy = py + 0.8*s;
+      const r  = 10*s;         // head radius
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI*2);
+      ctx.closePath();
+      ctx.clip();
+      ctx.drawImage(groomHead, cx - r, cy - r, r*2, r*2);
+      ctx.restore();
+    } else {
+      // --- Fallback 2: original pixel-art head ---
+      for(let i=2;i<=9;i++) drawPixel(ctx, px+i*s, py+0*s, s, hair);
+      for(let i=1;i<=10;i++) drawPixel(ctx, px+i*s, py+1*s, s, hair);
+      for(let r=2;r<=6;r++){ for(let c=2;c<=10;c++) drawPixel(ctx, px+c*s, py+r*s, s, skin); }
+      drawPixel(ctx, px+4*s, py+3*s, s, '#000');
+      drawPixel(ctx, px+8*s, py+3*s, s, '#000');
+    }
+
+    // Pixel body (used only in fallback modes)
+    for(let c=1;c<=11;c++) drawPixel(ctx, px+c*s, py+7*s, s, suit);
+    for(let r=8;r<=11;r++){ for(let c=3;c<=9;c++) drawPixel(ctx, px+c*s, py+r*s, s, (r===8||r===9)?shirt:suit); }
+    drawPixel(ctx, px+6*s, py+8*s, s, tie);
+    drawPixel(ctx, px+6*s, py+9*s, s, tie);
+    for(let r=12;r<=14;r++){ for(let c=4;c<=5;c++) drawPixel(ctx, px+c*s, py+r*s, s, suit); for(let c=7;c<=8;c++) drawPixel(ctx, px+c*s, py+r*s, s, suit); }
+    drawPixel(ctx, px+2*s, py+10*s, s, skin);
+    drawPixel(ctx, px+10*s, py+10*s, s, skin);
+  }
+
+  function drawBride(x,y,scale){
+    const s = scale||2;
+    const skin = '#F7D7C3', hair='#3b2d2a', dress=COL.white, flower=COL.pink, leaf=COL.leaf;
+    let px = x, py = y;
+
+    // --- Preferred: full-body PNG if available ---
+    if (brideFull && brideFull.complete && brideFull.naturalWidth > 0) {
+      ctx.save();
+      ctx.imageSmoothingEnabled = true;
+      const h = BRIDE_VIS.targetH; // visual height in pixels
+      const ratio = brideFull.naturalWidth / brideFull.naturalHeight;
+      const w = Math.round(h * ratio);
+      const dx = px + BRIDE_VIS.offsetX;
+      const dy = py + BRIDE_VIS.offsetY;
+      ctx.drawImage(brideFull, dx, dy, w, h);
+      ctx.restore();
+      return; // skip pixel fallback
+    }
+
+    // --- Fallback: original pixel-art bride ---
+    for(let i=2;i<=10;i++) drawPixel(ctx, px+i*s, py+0*s, s, hair);
+    for(let i=1;i<=11;i++) drawPixel(ctx, px+i*s, py+1*s, s, hair);
+    for(let r=2;r<=6;r++){ for(let c=2;c<=10;c++) drawPixel(ctx, px+c*s, py+r*s, s, skin); }
+    drawPixel(ctx, px+4*s, py+3*s, s, '#000');
+    drawPixel(ctx, px+8*s, py+3*s, s, '#000');
+    for(let c=0;c<=12;c++) drawPixel(ctx, px+c*s, py+7*s, s, '#ffffffcc');
+    for(let r=8;r<=14;r++){
+      for(let c=2-r%2;c<=12-(r-8);c++){ if(c>=0 && c<=12) drawPixel(ctx, px+c*s, py+r*s, s, dress); }
+    }
+    drawPixel(ctx, px+10*s, py+10*s, s, flower);
+    drawPixel(ctx, px+11*s, py+10*s, s, leaf);
+    drawPixel(ctx, px+9*s, py+11*s, s, flower);
+  }
+
+  function drawMaid(x,y,scale, cheering, flip){
+    const s = scale||2;
+    const skin = '#F7D7C3', hair='#3b2d2a', dress=COL.pink, leaf=COL.leaf;
+    let px = x, py = y;
+    ctx.save();
+    if(flip){ ctx.translate(px,0); ctx.scale(-1,1); px = 0; }
+    for(let i=1;i<=7;i++) drawPixel(ctx, px+i*s, py+0*s, s, hair);
+    for(let i=0;i<=8;i++) drawPixel(ctx, px+i*s, py+1*s, s, hair);
+    for(let r=2;r<=5;r++){ for(let c=2;c<=7;c++) drawPixel(ctx, px+c*s, py+r*s, s, skin); }
+    drawPixel(ctx, px+3*s, py+3*s, s, '#000');
+    drawPixel(ctx, px+6*s, py+3*s, s, '#000');
+    for(let r=6;r<=11;r++){ for(let c=2;c<=7;c++) drawPixel(ctx, px+c*s, py+r*s, s, dress); }
+    if(cheering){
+      drawPixel(ctx, px+7*s, py+6*s, s, skin);
+      drawPixel(ctx, px+8*s, py+5*s, s, skin);
+      drawPixel(ctx, px+9*s, py+5*s, s, leaf);
+    }else{
+      drawPixel(ctx, px+7*s, py+8*s, s, skin);
+    }
+    ctx.restore();
+  }
+
+  function drawItems(){
+    for(const it of items){
+      if(it.collected) continue;
+      const onScreenX = it.x - state.scrollX;
+      if(onScreenX < -30 || onScreenX > VIRTUAL_W + 30) continue;
+      if(it.type==='envelope') drawEnvelope(onScreenX-7, it.y-7, 2);
+      else drawFlower(onScreenX-7, it.y-7, 2);
+    }
+  }
+
+  function drawEnvelope(x,y,scale){
+    if(envelopeImg && envelopeImg.complete && envelopeImg.naturalWidth>0){
+      const t = performance.now()/1000;
+      const base = 18 * (scale||1);
+      const pulse = 1 + 0.04 * Math.sin(t*2.1 + (x+y)*0.03);
+      const size = Math.round(base * pulse);
+      const cx = x + size/2, cy = y + size/2;
+      const ang = 0.15 * Math.sin(t*1.6 + (x*0.05)); // ~8.6°
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(ang);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(envelopeImg, -size/2, -size/2, size, size);
+      // sparkle glint (tiny) at top-right corner
+      const gl = 0.65 + 0.35*Math.sin(t*5.2 + x*0.2);
+      ctx.globalAlpha = gl;
+      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      ctx.fillRect(size*0.18, -size*0.22, 2, 2);
+      ctx.fillRect(size*0.18+2, -size*0.22, 1, 1);
+      ctx.globalAlpha = 1;
+      ctx.restore();
+    } else {
+      // fallback: pixel-art envelope
+      const s = scale||2;
+      for(let r=0;r<6;r++){ for(let c=0;c<8;c++){ drawPixel(ctx, x+c*s, y+r*s, s, '#c21807'); } }
+      for(let i=0;i<8;i++){ drawPixel(ctx, x+i*s, y+0, s, '#8b0000'); }
+      drawPixel(ctx, x+3*s, y+3*s, s, '#d4af37');
+      drawPixel(ctx, x+4*s, y+3*s, s, '#d4af37');
+    }
+  }
+  function drawFlower(x,y,scale){
+    if(flowerImg && flowerImg.complete && flowerImg.naturalWidth>0){
+      const t = performance.now()/1000;
+      const base = 18 * (scale||1);
+      const pulse = 1 + 0.05 * Math.sin(t*2.6 + (x-y)*0.04);
+      const size = Math.round(base * pulse);
+      const cx = x + size/2, cy = y + size/2;
+      const ang = 0.12 * Math.sin(t*1.9 + (y*0.07)); // ~6.9°
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(ang);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(flowerImg, -size/2, -size/2, size, size);
+      // twinkle at the petal edge
+      const tw = 0.5 + 0.5*Math.sin(t*4.7 + y*0.15);
+      ctx.globalAlpha = tw;
+      ctx.fillStyle = 'rgba(255,240,250,0.95)';
+      ctx.fillRect(size*0.22, -size*0.20, 2, 2);
+      ctx.globalAlpha = 1;
+      ctx.restore();
+    } else {
+      // fallback: original pixel-art flower
+      const s = scale||2;
+      const petal = COL.pink, leaf = COL.leaf;
+      drawPixel(ctx, x+2*s, y+1*s, s, petal);
+      drawPixel(ctx, x+3*s, y+1*s, s, petal);
+      drawPixel(ctx, x+1*s, y+2*s, s, petal);
+      drawPixel(ctx, x+2*s, y+2*s, s, petal);
+      drawPixel(ctx, x+3*s, y+2*s, s, petal);
+      drawPixel(ctx, x+4*s, y+2*s, s, petal);
+      drawPixel(ctx, x+2*s, y+3*s, s, petal);
+      drawPixel(ctx, x+3*s, y+3*s, s, petal);
+      drawPixel(ctx, x+5*s, y+3*s, s, leaf);
+      drawPixel(ctx, x+1*s, y+3*s, s, leaf);
+    }
+  }
+
+  function drawHearts(x,y,count){
+    ctx.fillStyle = COL.pink;
+    for(let i=0;i<count;i++){
+      const hx = x + Math.sin((i*37 + performance.now()/200)) * 6 + i*10;
+      const hy = y - i*3;
+      ctx.fillRect(hx, hy, 3,3);
+      ctx.fillRect(hx+3, hy, 3,3);
+      ctx.fillRect(hx+1.5, hy-3, 3,3);
+      ctx.fillRect(hx-3, hy+3, 9,3);
+      ctx.fillRect(hx, hy+6, 3,3);
+    }
+  }
+
+  function drawPlayer(){
+    const bob = Math.sin(performance.now()/160) * 1.2;
+    drawGroom(player.x-14, player.y-14 + bob, 2);
+  }
+
+  function drawBrideAt(x, y){
+    drawBride(x-14, y-22, 2);
+    drawHearts(x+22, y-10, 5);
+  }
+
+  function drawBanner(){
+    ctx.save();
+    const x = 10, y = 10, w = VIRTUAL_W - 20, h = 68; // slightly smaller banner
+
+    // soft gradient background with rounded corners
+    const grad = ctx.createLinearGradient(0, y, 0, y + h);
+    grad.addColorStop(0, '#fffdf7');
+    grad.addColorStop(1, '#fff4f8');
+    ctx.globalAlpha = 0.96;
+    ctx.fillStyle = grad;
+    roundRect(ctx, x, y, w, h, 12);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#00000018';
+    ctx.stroke();
+
+    // subtle gold accent lines (adjusted for smaller height)
+    ctx.strokeStyle = 'rgba(212,175,55,0.6)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x+12, y+12); ctx.lineTo(x+w-12, y+12);
+    ctx.moveTo(x+12, y+h-12); ctx.lineTo(x+w-12, y+h-12);
+    ctx.stroke();
+
+    // big title: แบงค์ & จ๋อม (slightly smaller)
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = '900 22px system-ui, -apple-system, sans-serif';
+    const title = 'แบงค์ ♥ จ๋อม';
+    ctx.fillStyle = '#00000022';
+    ctx.fillText(title, VIRTUAL_W/2, y + h*0.40 + 1.4); // soft shadow
+    ctx.fillStyle = COL.deep;
+    ctx.fillText(title, VIRTUAL_W/2, y + h*0.40);
+
+    // subtitle (slightly smaller)
+    ctx.font = '12px system-ui, -apple-system, sans-serif';
+    ctx.fillStyle = '#6b5a50';
+    ctx.fillText('เกม ประตูเงิน ประตูทอง', VIRTUAL_W/2, y + h*0.72);
+
+    // tiny decorative hearts (relative to banner height)
+    ctx.font = '16px system-ui, -apple-system, sans-serif';
+    const heartY = y + h*0.35;
+    ctx.fillText('💖', x+24, heartY);
+    ctx.fillText('💖', x+w-24, heartY);
+
+    ctx.restore();
+  }
+
+  function drawCenterScore(){
+    const text = `สินสอด: ${fmt(state.score)} บาท`;
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const w = Math.min(300, ctx.measureText(text).width + 40);
+    const x = VIRTUAL_W/2;
+    const targetY = VIRTUAL_H * 0.72; // move lower than center
+    const maxY = VIRTUAL_H - GROUND_H - 48; // keep above ground
+    const y = Math.min(targetY, maxY);
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = COL.white;
+    roundRect(ctx, x - w/2, y - 20, w, 40, 12);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.font = '16px "Press Start 2P", ui-monospace, monospace';
+    ctx.fillStyle = '#00000022';
+    ctx.fillText(text, x, y+1.5);
+    ctx.fillStyle = COL.deep;
+    ctx.fillText(text, x, y);
+    ctx.restore();
+  }
+
+  function roundRect(ctx, x, y, w, h, r){
+    const rr = Math.min(r, w/2, h/2);
+    ctx.beginPath();
+    ctx.moveTo(x+rr, y);
+    ctx.arcTo(x+w, y, x+w, y+h, rr);
+    ctx.arcTo(x+w, y+h, x, y+h, rr);
+    ctx.arcTo(x, y+h, x, y, rr);
+    ctx.arcTo(x, y, x+w, y, rr);
+    ctx.closePath();
+  }
+
+  function drawHUDOverlay(text, subtext, showHint){
+    ctx.save();
+    ctx.fillStyle = '#00000055';
+    ctx.fillRect(0,0,VIRTUAL_W,VIRTUAL_H);
+    ctx.fillStyle = COL.white;
+    ctx.fillRect(24, 120, VIRTUAL_W-48, 280);
+    ctx.strokeStyle = '#00000020';
+    ctx.strokeRect(24, 120, VIRTUAL_W-48, 280);
+    ctx.fillStyle = COL.deep;
+    ctx.font = 'bold 20px system-ui, -apple-system, sans-serif';
+    ctx.textAlign='center';
+    ctx.fillText(text, VIRTUAL_W/2, 170);
+    ctx.font = '14px system-ui, -apple-system, sans-serif';
+    wrapText(subtext, VIRTUAL_W/2, 206, VIRTUAL_W-96, 18);
+    if(showHint){
+      ctx.fillStyle = '#666';
+      ctx.fillText('แตะหน้าจอหรือกด Space เพื่อเริ่ม', VIRTUAL_W/2, 320);
+    }
+    ctx.restore();
+  }
+
+  function wrapText(text, x, y, maxWidth, lineHeight){
+    const words = text.split(' ');
+    let line = '';
+    for(let n=0;n<words.length;n++){
+      const testLine = line + words[n] + ' ';
+      const metrics = ctx.measureText(testLine);
+      if(metrics.width > maxWidth && n>0){
+        ctx.fillText(line, x, y);
+        line = words[n] + ' ';
+        y += lineHeight;
+      }else{
+        line = testLine;
+      }
+    }
+    ctx.fillText(line, x, y);
+  }
+
+  function drawMaidPetals(){
+    for(const p of maidPetals){
+      const onScreenX = p.x - state.scrollX;
+      if(onScreenX < -20 || onScreenX > VIRTUAL_W + 20) continue;
+      ctx.save();
+      ctx.translate(onScreenX, p.y);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-2,-2,4,4);
+      ctx.restore();
+    }
+  }
+
+  function drawFloats(){
+    ctx.save();
+    ctx.font = '12px "Press Start 2P", ui-monospace, monospace';
+    ctx.textAlign='center';
+    for(const f of floats){
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(f.text, f.x+1, f.y+1);
+      ctx.fillStyle = f.color || '#1b5e20';
+      ctx.fillText(f.text, f.x, f.y);
+    }
+    ctx.restore();
+  }
+
+  // Cute pre-start animation at screen edges
+  function drawIntroCute(){
+    const t = performance.now()/1000;
+    const bob = Math.sin(t*2.2)*4;      // vertical bob
+    const sway = Math.sin(t*1.6)*3;     // slight horizontal sway
+
+    const groundY = VIRTUAL_H - GROUND_H - 2;
+
+    // --- Groom on the left ---
+    const leftMargin = 40;
+    const groomBottom = groundY + bob;
+    const groomLeft = leftMargin + sway;
+    // Prefer full PNG; else fallback to pixel sprite
+    const drewGroom = drawPNGBottom(groomFull, 100, groomLeft, groomBottom, false);
+    if(!drewGroom){
+      // pixel fallback: approximate bottom alignment
+      const gx = groomLeft + 4; // nudge to look good
+      const gy = groomBottom - 56; // height guess for pixel body
+      drawGroom(gx, gy, 2);
+    }
+
+    // --- Bride on the right ---
+    const rightMargin = 62;
+    const brideBottom = groundY - bob*0.9;
+    const brideLeft = (VIRTUAL_W - rightMargin) - 48 + (-sway); // will be overridden when PNG loads
+    const drewBride = drawPNGBottom(brideFull, 120, VIRTUAL_W - rightMargin - 70 + (-sway), brideBottom, true);
+    if(!drewBride){
+      // pixel fallback (no mirror) near right edge
+      const bx = VIRTUAL_W - rightMargin - 28;
+      const by = brideBottom - 60;
+      drawBride(bx, by, 2);
+    }
+
+    // floating hearts in the middle
+    const midX = VIRTUAL_W/2;
+    for(let i=0;i<4;i++){
+      const y = 110 + i*14 + (Math.sin(t*1.3 + i)*3);
+      ctx.fillStyle = i%2? COL.pink : '#ff99aa';
+      ctx.fillRect(midX - 2 - i*2, y, 4,4);
+      ctx.fillRect(midX + 2 - i*2, y, 4,4);
+      ctx.fillRect(midX - 0.5 - i*2, y-3, 3,3);
+      ctx.fillRect(midX - 3 - i*2, y+3, 9,3);
+    }
+  }
+
+  function loop(){
+    // time step
+    const __now = performance.now();
+    __dtSec = (__now - __lastTime) / 1000;
+    if(!Number.isFinite(__dtSec) || __dtSec <= 0){ __dtSec = 1/60; }
+    if(__dtSec > 0.05) __dtSec = 0.05; // clamp to 50ms
+    __dt60 = __dtSec * 60;
+    __lastTime = __now;
+
+    update();
+    clear();
+    if (passedCount >= 1) drawCoupleClouds();  // โชว์หลังผ่านประตูแรก
+    drawClouds();        // behind procession & gates
+    drawAmbientPetals(); // subtle particles behind gameplay
+    drawProcession();
+    drawAllGates();
+    updateGateMessage();
+    drawGateMessage();
+    drawItems();
+    drawMaidPetals();
+
+    if(state.mode!=='endless'){
+      const brideOnScreenX = bride.x - state.scrollX;
+      if(brideOnScreenX > -60 && brideOnScreenX < VIRTUAL_W + 60){
+        drawBrideAt(brideOnScreenX, bride.y);
+      }
+    }
+    // near bride hint (after passing 4 gates)
+    if(state.mode!=='endless' && state.phase==='play' && !nearBrideShown && passedCount >= 4){
+      nearBrideShown = true;
+      // Speak from the right edge to hint the bride's side
+      showBubble(pick(MSG.nearBride), VIRTUAL_W - 12, 86, 'screen', 'right');
+    }
+    drawPlayer();
+    drawGround();
+    drawBanner();
+    drawBubbles();
+    drawFloats();
+    drawCenterScore();
+
+    if(state.phase==='ready'){
+      // Show cute intro at edges under the overlay
+      drawIntroCute();
+      drawHUDOverlay('',
+        `คุณคือเจ้าบ่าว “แบงค์” • ผ่านประตูได้ +${fmt(DOWRY_PER_GATE)} บาท • เก็บซองแดง +${fmt(BONUS_ENVELOPE)} • เก็บดอกไม้ +${fmt(BONUS_FLOWER)} • แตะเพื่อกระโดด ลอดช่องให้พอดี อย่าชน! ใช้ปุ่ม “โหมด” เพื่อสลับ Casual/Endless (หรือกด E)`,
+        true);
+      drawStartNames();
+    } else if(state.phase==='gameover'){
+      drawGameOverPanel();
+    } else if(state.phase==='win'){
+      drawHUDOverlay(winLine || 'สำเร็จ! 💍', `แบงค์ ♥ จ๋อม — Happily Ever After • สินสอดรวม: ${fmt(state.score)} บาท`, false);
+    }
+
+    updateModeSwitchUI();
+    requestAnimationFrame(loop);
+  }
+  loop();
+
+  window.addEventListener('resize', setupCanvas, {passive:true});
+  document.getElementById('camBtn').textContent = state.useCam ? 'โหมดเห็นหน้า: เปิด' : 'โหมดเห็นหน้า: ปิด';
+  updateRecLabel();
+  setScoreLabel();
+  updateModeSwitchUI();
+})();
+</script>
+</body>
+</html>
