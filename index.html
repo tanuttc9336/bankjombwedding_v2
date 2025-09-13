@@ -94,6 +94,18 @@
     padding:8px 12px;
     z-index: 5;
   }
+  .btn#shareBtn{
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 6; /* above canvas */
+    background:#ffffff;
+    color:#333;
+    border:2px solid #00000012;
+    padding:10px 16px;
+    box-shadow: 0 8px 20px var(--shadow);
+  }
   .btn#recBtn.active{ border-color:#ff8a80; color:#b00020; background:#fff5f5; }
   .pill{
     border-radius:999px;
@@ -130,15 +142,15 @@
     <div class="card">
       <canvas id="stage" width="360" height="640" aria-label="Wedding Flappy canvas"></canvas>
       <div id="modeSwitch" class="overlay-switch" aria-label="สลับโหมดก่อนเริ่ม">
-        <button class="seg" id="modeCasualBtn" type="button">Casual</button>
-        <button class="seg" id="modeEndlessBtn" type="button">Endless</button>
+        <button class="seg" id="modeCasualBtn" type="button">โหมดชิล ๆ</button>
+        <button class="seg" id="modeEndlessBtn" type="button">โหมดแข่งขัน</button>
       </div>
+      <button class="btn" id="shareBtn" style="display:none">แชร์คะแนน</button>
       <div class="hud">
         <div class="pill"><strong>สินสอด:</strong> <span id="score" class="pixel pixel-tight">0</span> บาท</div>
         <button class="btn" id="restartBtn">เริ่มใหม่</button>
         <button class="btn" id="camBtn">โหมดเห็นหน้า: ปิด</button>
         <button class="btn" id="recBtn">บันทึก: ปิด</button>
-        <button class="btn" id="shareBtn" style="display:none">แชร์คะแนน</button>
       </div>
       <div class="note">แตะหน้าจอหรือกด <strong>Space</strong> เพื่อกระโดด • ผ่าน<strong>ประตูเงิน ประตูทอง</strong>ไปหา <strong>จ๋อม</strong></div>
       <div class="row note">
@@ -1103,7 +1115,28 @@ let winsCount = 0;
   function updateShareBtnUI(){
     // Show on WIN; or on GAMEOVER after reveal is shown
     const show = (state.phase==='win') || (state.phase==='gameover' && state.revealScore);
-    shareBtn.style.display = show ? 'block' : 'none';
+    if(!show){ shareBtn.style.display = 'none'; return; }
+
+    // Compute position over the canvas (convert virtual 360x640 -> CSS px)
+    const stage = document.getElementById('stage');
+    const rect = stage.getBoundingClientRect();
+    const scaleX = rect.width / VIRTUAL_W;
+    const scaleY = rect.height / VIRTUAL_H;
+
+    // Target positions (virtual coordinates)
+    // For GAMEOVER: put just below the total score (which is around y=290)
+    // For WIN: put above the ground a bit
+    const targetVY = (state.phase==='gameover') ? 330 : (VIRTUAL_H - GROUND_H - 72);
+    const targetVX = VIRTUAL_W / 2;
+
+    const px = rect.left + window.scrollX + targetVX * scaleX;
+    const py = rect.top  + window.scrollY + targetVY * scaleY;
+
+    shareBtn.style.display = 'block';
+    shareBtn.style.position = 'absolute';
+    shareBtn.style.left = px + '1';
+    shareBtn.style.top  = py + '1';
+    shareBtn.style.transform = 'translate(-50%, -50%)';
   }
   recBtn.addEventListener('click', ()=>{
     if(state.phase==='play'){
@@ -1150,7 +1183,7 @@ let winsCount = 0;
       // 3) Mode + breakdown row
       octx.font = '12px system-ui, -apple-system, sans-serif';
       octx.fillStyle = '#333';
-      const modeText = state.mode==='endless' ? 'Endless' : 'Casual';
+      const modeText = state.mode==='endless' ? 'โหมดแข่งขัน' : 'โหมดชิล ๆ';
       const sub = `${modeText} • Gates ${stats.gates} • ซอง ${stats.envelopes} • ดอก ${stats.flowers}`;
       octx.fillText(sub, VIRTUAL_W/2, VIRTUAL_H - GROUND_H - 34);
       octx.restore();
@@ -1187,6 +1220,8 @@ let winsCount = 0;
 
   // Hook the Share button click
   shareBtn.addEventListener('click', shareScoreImage);
+  // Reposition share button on window resize (to keep it centered over canvas)
+  window.addEventListener('resize', ()=>{ updateShareBtnUI(); });
 
   // ----- Physics & Collision -----
   function aabb(ax,ay,aw,ah, bx,by,bw,bh){
@@ -1508,7 +1543,7 @@ const RESTART_EXTRA_DELAY = 150; // บัฟเฟอร์ก่อนยอ�
 if(state.canRestart){
   ctx.fillStyle = '#666';
   ctx.font = '12px system-ui, -apple-system, sans-serif';
-  ctx.fillText('แตะจอ/กด Space เพื่อเริ่มใหม่', VIRTUAL_W/2, 360);
+  ctx.fillText('แตะจอ เพื่อเริ่มใหม่', VIRTUAL_W/2, 325);
 }
     }
 
