@@ -138,6 +138,7 @@
         <button class="btn" id="restartBtn">เริ่มใหม่</button>
         <button class="btn" id="camBtn">โหมดเห็นหน้า: ปิด</button>
         <button class="btn" id="recBtn">บันทึก: ปิด</button>
+        <button class="btn" id="shareBtn" style="display:none">แชร์คะแนน</button>
       </div>
       <div class="note">แตะหน้าจอหรือกด <strong>Space</strong> เพื่อกระโดด • ผ่าน<strong>ประตูเงิน ประตูทอง</strong>ไปหา <strong>จ๋อม</strong></div>
       <div class="row note">
@@ -164,6 +165,10 @@
   const GATE_SPACING = 220;
   const NUM_GATES = 12; // reach the bride after this many gates
   const GROUND_H = 48;
+
+  // Item visual & hit sizes (to match PNG rendering ~36px)
+  const ITEM_DRAW = 36; // pixels on screen (both envelope & flower)
+  const ITEM_HIT  = 30; // forgiving hitbox within the draw size
 
   // --- Endless mode ramping ---
   const BASE_SPEED = SPEED;          // px/s base scroll
@@ -548,7 +553,28 @@ function progress01(){
     newRecord: false,
     canRestart: false,
     restartAt: 0,
+    shakeUntil: 0,
+    shakeAmp: 0,
   };
+  // --- Micro Shake helpers ---
+  function addShake(durationMs, amp){
+    const now = performance.now();
+    state.shakeUntil = Math.max(state.shakeUntil || 0, now + (durationMs||100));
+    state.shakeAmp   = Math.max(state.shakeAmp || 0, amp||1.2);
+  }
+  function getShakeOffset(){
+    if(state.phase !== 'play') return {x:0,y:0};
+    const now = performance.now();
+    const left = (state.shakeUntil||0) - now;
+    if(left <= 0) return {x:0,y:0};
+    const t = Math.max(0, Math.min(1, left / 180)); // normalize ~0..1 for 180ms window
+    const falloff = t*t; // ease-out quadratic
+    // use time-based pseudo-noise so it doesn't teleport too hard
+    const tt = now * 0.06; // frequency
+    const x = (Math.sin(tt*7.3) + Math.cos(tt*5.1)) * 0.5 * (state.shakeAmp||1.2) * falloff;
+    const y = (Math.cos(tt*6.7) - Math.sin(tt*4.3)) * 0.5 * (state.shakeAmp||1.2) * falloff;
+    return {x, y};
+  }
 
   const player = {
     x: 72, y: VIRTUAL_H*0.5, vy: 0, w: 22, h: 22
@@ -582,6 +608,83 @@ function progress01(){
     ctx.drawImage(img, x, y, w, h);
     ctx.restore();
     return true;
+  }
+
+  // Utility: Check if image is loaded and valid
+  function imgOk(im){ return im && im.complete && im.naturalWidth>0 && im.naturalHeight>0; }
+
+  // Draw watermark: couple's names bottom center, tiny groom/bride at corners
+  function drawBrandWatermark(octx, DPRx){
+    const vw = VIRTUAL_W, vh = VIRTUAL_H;
+    octx.save();
+    octx.scale(DPRx, DPRx);
+
+    // start_names centered bottom
+    if(imgOk(startNames)){
+      const maxW = vw * 0.58;
+      const iw = startNames.naturalWidth, ih = startNames.naturalHeight;
+      const sc = Math.min(maxW/iw, 64/ih, 1);
+      const w = Math.round(iw*sc), h = Math.round(ih*sc);
+      const x = Math.round((vw - w)/2);
+      const y = Math.round(vh - GROUND_H - h - 8);
+      octx.globalAlpha = 0.75;
+      octx.imageSmoothingEnabled = false;
+      octx.drawImage(startNames, x, y, w, h);
+      octx.globalAlpha = 1;
+    }
+
+    // tiny groom/bride silhouettes bottom corners
+    const baseH = 40;
+    if(imgOk(groomFull)){
+      const r = groomFull.naturalWidth / groomFull.naturalHeight;
+      const h = baseH, w = Math.round(h*r);
+      const x = 8, y = vh - GROUND_H - h - 6;
+      octx.globalAlpha = 0.9;
+      octx.imageSmoothingEnabled = true;
+      octx.drawImage(groomFull, x, y, w, h);
+      octx.globalAlpha = 1;
+    }
+    if(imgOk(brideFull)){
+      const r = brideFull.naturalWidth / brideFull.naturalHeight;
+      const h = baseH, w = Math.round(h*r);
+      const x = vw - w - 8, y = vh - GROUND_H - h - 6;
+      octx.globalAlpha = 0.9;
+      octx.imageSmoothingEnabled = true;
+      octx.drawImage(brideFull, x, y, w, h);
+      octx.globalAlpha = 1;
+    }
+
+    octx.restore();
+  }
+
+  // Draw selfie stamp (bottom right) if camera is on and ready
+  function drawSelfieStamp(octx, DPRx){
+    if(!(state.useCam && camReady && camVideo && camVideo.readyState >= 2)) return;
+    const vw = VIRTUAL_W, vh = VIRTUAL_H;
+    const radius = 26;
+    const cx = vw - 12 - radius;
+    const cy = vh - GROUND_H - 12 - radius;
+
+    octx.save();
+    octx.scale(DPRx, DPRx);
+    octx.fillStyle = 'rgba(255,255,255,0.95)';
+    octx.beginPath(); octx.arc(cx, cy, radius+3, 0, Math.PI*2); octx.fill();
+    octx.beginPath(); octx.arc(cx, cy, radius, 0, Math.PI*2); octx.clip();
+
+    octx.save();
+    octx.translate(cx, cy);
+    octx.scale(-1, 1);
+    const vwVid = camVideo.videoWidth || VIRTUAL_W, vhVid = camVideo.videoHeight || VIRTUAL_H;
+    const scale = Math.max((radius*2)/vwVid, (radius*2)/vhVid);
+    const dw = vwVid*scale, dh = vhVid*scale;
+    octx.drawImage(camVideo, -dw/2, -dh/2, dw, dh);
+    octx.restore();
+
+    octx.strokeStyle = 'rgba(0,0,0,0.15)';
+    octx.lineWidth = 1;
+    octx.beginPath(); octx.arc(cx, cy, radius, 0, Math.PI*2); octx.stroke();
+
+    octx.restore();
   }
 
   function drawCoupleClouds(){
@@ -685,7 +788,7 @@ function progress01(){
       const kind = (Math.random()<0.5)?'envelope':'flower';
       const ix = x + 80 + k*24 + randBetween(-6, 6);
       const iy = gapY + randBetween(-gap*0.35, gap*0.35);
-      items.push({x:ix, y:iy, type:kind, w:14, h:14, collected:false});
+      items.push({x:ix, y:iy, type:kind, w:ITEM_HIT, h:ITEM_HIT, collected:false});
     }
     lastGateX = x;
   }
@@ -700,6 +803,30 @@ function progress01(){
   // Petals thrown by bridesmaids: world-coordinates particles
   // each: {x,y,vx,vy,life,color}
   let maidPetals = [];
+  // Gate sparkle streaks (short glints on pillar edges)
+  // each: {x,y,len,angle,life,lifeMax,color}
+  let gateFX = [];
+  // Item pickup bursts (short-lived confetti-like particles)
+  // each: {x,y,vx,vy,life,lifeMax,size,color}
+  let pickupFX = [];
+  function spawnPickupBurst(x, y, type){
+    const N = 14; // number of particles
+    for(let i=0;i<N;i++){
+      const a = Math.random()*Math.PI*2;
+      const sp = 1.2 + Math.random()*1.8; // initial speed
+      const vx = Math.cos(a)*sp;
+      const vy = Math.sin(a)*sp - 0.5; // slight upward bias
+      const size = 2 + (Math.random()<0.3?1:0);
+      let color;
+      if(type==='envelope'){
+        color = (Math.random()<0.7)? '#c21807' : '#d4af37'; // red / gold
+      }else{
+        color = (Math.random()<0.7)? '#f4b6c2' : '#7ac597'; // pink / green
+      }
+      const life = 26 + Math.floor(Math.random()*10); // frames at 60fps ~0.45s
+      pickupFX.push({ x, y, vx, vy, life, lifeMax: life, size, color });
+    }
+  }
   let procession = [];
   // Bride: {x, y}
   let bride = { x: 0, y: VIRTUAL_H*0.46 };
@@ -820,7 +947,7 @@ let winsCount = 0;
           const kind = (Math.random()<0.5)?'envelope':'flower';
           const ix = x + 80 + k*24 + randBetween(-6, 6);
           const iy = gapY + randBetween(-gap*0.35, gap*0.35);
-          items.push({x:ix, y:iy, type:kind, w:14, h:14, collected:false});
+          items.push({x:ix, y:iy, type:kind, w:ITEM_HIT, h:ITEM_HIT, collected:false});
         }
         lastGateX = x;
         x += currentSpacing();
@@ -841,7 +968,7 @@ let winsCount = 0;
           const kind = (Math.random()<0.5)?'envelope':'flower';
           const ix = x + 80 + k*24 + randBetween(-6, 6);
           const iy = gapY + randBetween(-gapSize*0.35, gapSize*0.35);
-          items.push({x:ix, y:iy, type:kind, w:14, h:14, collected:false});
+          items.push({x:ix, y:iy, type:kind, w:ITEM_HIT, h:ITEM_HIT, collected:false});
         }
         x += GATE_SPACING;
       }
@@ -962,6 +1089,7 @@ let winsCount = 0;
 
   // --- Recording toggle button ---
   const recBtn = document.getElementById('recBtn');
+  const shareBtn = document.getElementById('shareBtn');
   function updateRecLabel(){
     if(isRecording){
       recBtn.textContent = 'กำลังบันทึก… คลิกเพื่อหยุด';
@@ -970,6 +1098,12 @@ let winsCount = 0;
       recBtn.textContent = 'บันทึก: ' + (state.recArmed ? 'เปิด' : 'ปิด');
       recBtn.classList.toggle('active', state.recArmed);
     }
+  }
+
+  function updateShareBtnUI(){
+    // Show on WIN; or on GAMEOVER after reveal is shown
+    const show = (state.phase==='win') || (state.phase==='gameover' && state.revealScore);
+    shareBtn.style.display = show ? 'block' : 'none';
   }
   recBtn.addEventListener('click', ()=>{
     if(state.phase==='play'){
@@ -983,14 +1117,99 @@ let winsCount = 0;
     updateRecLabel();
   });
 
+  // --- Share Score Image ---
+  async function shareScoreImage(){
+    try{
+      const stage = document.getElementById('stage');
+      const w = stage.width;   // device pixels
+      const h = stage.height;  // device pixels
+      const DPRx = (window.devicePixelRatio||1);
+
+      // Create an offscreen canvas to compose the share image
+      const off = document.createElement('canvas');
+      off.width = w; off.height = h;
+      const octx = off.getContext('2d');
+
+      // 1) Copy current game frame
+      octx.drawImage(stage, 0, 0);
+
+      // 2) Overlay total score text (virtual coordinates)
+      octx.save();
+      octx.scale(DPRx, DPRx);
+      const totalText = `รวม: ${fmt(state.score)} บาท`;
+      octx.textAlign = 'center';
+      octx.textBaseline = 'middle';
+      octx.font = '16px "Press Start 2P", ui-monospace, monospace';
+      // soft shadow
+      octx.fillStyle = '#00000033';
+      octx.fillText(totalText, VIRTUAL_W/2, VIRTUAL_H - GROUND_H - 54 + 1.3);
+      // main
+      octx.fillStyle = '#503A2F';
+      octx.fillText(totalText, VIRTUAL_W/2, VIRTUAL_H - GROUND_H - 54);
+
+      // 3) Mode + breakdown row
+      octx.font = '12px system-ui, -apple-system, sans-serif';
+      octx.fillStyle = '#333';
+      const modeText = state.mode==='endless' ? 'Endless' : 'Casual';
+      const sub = `${modeText} • Gates ${stats.gates} • ซอง ${stats.envelopes} • ดอก ${stats.flowers}`;
+      octx.fillText(sub, VIRTUAL_W/2, VIRTUAL_H - GROUND_H - 34);
+      octx.restore();
+
+      // 4) Brand watermark (start_names centered; groom/bride small)
+      drawBrandWatermark(octx, DPRx);
+
+      // 5) Selfie stamp (if camera is on & ready)
+      drawSelfieStamp(octx, DPRx);
+
+      // 6) Export as PNG blob
+      const blob = await new Promise(res => off.toBlob(res, 'image/png', 0.92));
+      if(!blob){ showBubble('ไม่สามารถสร้างภาพแชร์ได้', VIRTUAL_W/2, 140, 'screen'); return; }
+
+      const fileName = `wedding-score_${Date.now()}.png`;
+      const file = new File([blob], fileName, {type:'image/png'});
+
+      // 7) Try Web Share API (Level 2) first
+      if(navigator.canShare && navigator.canShare({files:[file]})){
+        try{
+          await navigator.share({ files:[file], title:'Wedding Flappy Score', text:`ฉันได้ ${fmt(state.score)} บาท!` });
+          return; // shared successfully or user canceled
+        }catch(err){ /* ignore and fallback to download */ }
+      }
+
+      // 8) Fallback: trigger download
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = fileName; a.click();
+      setTimeout(()=>URL.revokeObjectURL(url), 1200);
+      showBubble('บันทึกภาพสรุปแล้ว ✅', VIRTUAL_W/2, 160, 'screen');
+    }catch(err){ console.warn('shareScoreImage error', err); }
+  }
+
+  // Hook the Share button click
+  shareBtn.addEventListener('click', shareScoreImage);
+
   // ----- Physics & Collision -----
   function aabb(ax,ay,aw,ah, bx,by,bw,bh){
     return ax < bx+bw && ax+aw > bx && ay < by+bh && ay+ah > by;
   }
 
   function addFloat(x,y,text,color){
-    floats.push({x,y,vy:-0.6,life:60,text,color});
+    const life = 60; // frames (~1s at 60fps)
+    const now = performance.now();
+    floats.push({x,y,vy:-0.6,life,lifeMax:life,text,color,t0:now,dur:150});
   }
+  function easeOutBack(t){
+    const c1 = 1.70158, c3 = c1 + 1;
+    return 1 + c3*Math.pow(t-1,3) + c1*Math.pow(t-1,2);
+  }
+  // Customizable back-ease: k ≈ 1.7 (soft) … 2.4 (bouncy)
+  function easeOutBackK(t, k){
+    const c1 = k, c3 = c1 + 1;
+    return 1 + c3*Math.pow(t-1,3) + c1*Math.pow(t-1,2);
+  }
+  // Smooth input (reduces jerk): smoothstep-ish
+  function smooth01(x){ return x*x*(3 - 2*x); }
+
 
   function spawnMaidShower(gate){
     // spawn petals from inside the gap (two clusters near center, left/right of the ribbon)
@@ -1019,9 +1238,27 @@ let winsCount = 0;
     }
   }
 
+  function spawnGateSparkles(g){
+    // 1–2 sparkles near the gap edges (top/bottom), in world coordinates
+    const n = (Math.random() < 0.55) ? 1 : 2;
+    for(let i=0;i<n;i++){
+      const atTop = Math.random() < 0.5;
+      const y = atTop ? (g.gapY - g.gap/2 - 4 + Math.random()*8) : (g.gapY + g.gap/2 - 4 + Math.random()*8);
+      const x = g.x + (Math.random()*28 - 14); // within pillar width (~40) centered
+      const len = 6 + Math.random()*8;         // streak length
+      const angle = (Math.random()*0.6 - 0.3); // slight tilt
+      const life = 18 + Math.floor(Math.random()*4); // ~300ms @60fps
+      // gold = warm; silver = cool/white
+      const color = (g.type==='gold') ? (Math.random()<0.6 ? '#ffdfa6' : '#ffffff')
+                                      : (Math.random()<0.6 ? '#e8eefc' : '#ffffff');
+      gateFX.push({ x, y, len, angle, life, lifeMax: life, color });
+    }
+  }
+
   function startGameOver(){
     if(state.phase==='gameover') return;
     state.phase = 'gameover';
+    addShake(160, 1.8);
     stopRecording();
     state.gameOverAt = performance.now();
     state.revealScore = false;
@@ -1061,9 +1298,15 @@ let winsCount = 0;
         if(!g.open && (player.x + 14) > (onScreenX - 36)){
           g.open = true; // trigger opening when near
         }
+        const prevT = g.lastOpenT || 0;
         if(g.open && g.openT < 1){
-          g.openT = Math.min(1, g.openT + 0.08 * __dt60); // 0.08 per 60-fps frame
+          g.openT = Math.min(1, g.openT + 0.08 * __dt60);
+          // spawn sparkles when opening progresses noticeably
+          if(g.openT - prevT > 0.04){
+            spawnGateSparkles(g);
+          }
         }
+        g.lastOpenT = g.openT;
         const topRect = {x:onScreenX-20, y:0, w:40, h:g.gapY - g.gap/2};
         const botRect = {x:onScreenX-20, y:g.gapY + g.gap/2, w:40, h:VIRTUAL_H - GROUND_H - (g.gapY + g.gap/2)};
         if(aabb(player.x, player.y, player.w, player.h, topRect.x, topRect.y, topRect.w, topRect.h) ||
@@ -1083,6 +1326,7 @@ let winsCount = 0;
           if(!g.shower){ g.shower = true; spawnMaidShower(g); }
           // clear gate message once passed
           if(gateMsg && gateMsg.gateIndex === gates.indexOf(g)) gateMsg = null;
+          addShake(90, 0.8);
         }
       }
 
@@ -1090,13 +1334,18 @@ let winsCount = 0;
         if(it.collected) continue;
         const onScreenX = it.x - state.scrollX;
         if(onScreenX < -30 || onScreenX > VIRTUAL_W + 30) continue;
-        if(aabb(player.x, player.y, player.w, player.h, onScreenX-7, it.y-7, it.w, it.h)){
+        const hx = onScreenX - it.w/2;
+        const hy = it.y - it.h/2;
+        if(aabb(player.x, player.y, player.w, player.h, hx, hy, it.w, it.h)){
           it.collected = true;
           const val = it.type==='envelope' ? BONUS_ENVELOPE : BONUS_FLOWER;
           if(it.type==='envelope') stats.envelopes += 1; else stats.flowers += 1;
           state.score += val;
           setScoreLabel();
           addFloat(player.x+8, player.y-14, `+${fmt(val)}`, it.type==='envelope' ? '#8b0000' : '#2e7d32');
+          // spawn pickup confetti at item world position
+          spawnPickupBurst(it.x, it.y, it.type);
+          addShake(60, 0.5);
         }
       }
 
@@ -1130,6 +1379,20 @@ let winsCount = 0;
         p.life -= __dt60;
       }
       maidPetals = maidPetals.filter(p => p.life > 0 && p.y < VIRTUAL_H - 2);
+
+      // update gate sparkle streaks
+      for(const s of gateFX){ s.life -= __dt60; }
+      gateFX = gateFX.filter(s => s.life > 0);
+
+      // update pickup bursts
+      for(const p of pickupFX){
+        p.vy += 0.06 * __dt60;     // tiny gravity
+        p.vx *= (1 - 0.02*__dt60); // mild air drag
+        p.x  += p.vx * __dt60 * 1.0;
+        p.y  += p.vy * __dt60 * 1.0;
+        p.life -= __dt60;
+      }
+      pickupFX = pickupFX.filter(p => p.life > 0 && p.y < VIRTUAL_H - 2);
 
       for(const f of floats){ f.y += f.vy * __dt60; f.life -= __dt60; }
       floats = floats.filter(f=>f.life>0);
@@ -1366,19 +1629,39 @@ if(state.canRestart){
     const innerTop = g.gapY - g.gap/2;
     const innerBot = g.gapY + g.gap/2;
     const centerY  = g.gapY;
+
+    // springy open amount using ease-out-back, but smoother and bouncier
+    const tRaw = Math.max(0, Math.min(1, g.openT));
+    const tSm  = smooth01(tRaw);          // smoother approach
+    const t    = easeOutBackK(tSm, 2.15); // stronger spring than default 1.70
+
     const width = 6; // ribbon thickness
-    const halfLen = Math.max(0, (innerBot - innerTop)/2 * (1 - g.openT));
-    if(halfLen <= 0.5) return;
+    const halfLen0 = (innerBot - innerTop)/2;
+    const halfLen  = Math.max(0, halfLen0 * (1 - t));
+    if(halfLen <= 0.5){
+      // subtle knot pop when fully opened
+      ctx.save();
+      ctx.fillStyle = COL.gold;
+      const k = 1 + 0.16 * (1 - tSm); // tiny scale while near-open
+      const kw = Math.round(6*k), kh = Math.round(6*k);
+      ctx.fillRect(onScreenX - Math.floor(kw/2), centerY - Math.floor(kh/2), kw, kh);
+      ctx.restore();
+      return;
+    }
 
     ctx.save();
     ctx.fillStyle = '#d47fa6'; // pink ribbon
-    // upper vertical segment
+    // upper vertical segment retracting upward
     ctx.fillRect(onScreenX - width/2, centerY - halfLen, width, halfLen);
-    // lower vertical segment
+    // lower vertical segment retracting downward
     ctx.fillRect(onScreenX - width/2, centerY, width, halfLen);
-    // center knot
+
+    // center knot with slight bounce scaling based on spring t
     ctx.fillStyle = COL.gold;
-    ctx.fillRect(onScreenX - 3, centerY - 3, 6, 6);
+    const k = 1 + 0.14 * (1 - t); // small overshoot at start
+    const kw = Math.round(6*k), kh = Math.round(6*k);
+    ctx.fillRect(onScreenX - Math.floor(kw/2), centerY - Math.floor(kh/2), kw, kh);
+
     ctx.restore();
   }
   function drawProcession(){
@@ -1546,15 +1829,18 @@ if(state.canRestart){
       if(it.collected) continue;
       const onScreenX = it.x - state.scrollX;
       if(onScreenX < -30 || onScreenX > VIRTUAL_W + 30) continue;
-      if(it.type==='envelope') drawEnvelope(onScreenX-7, it.y-7, 2);
-      else drawFlower(onScreenX-7, it.y-7, 2);
+      const dx = onScreenX - ITEM_DRAW/2;
+      const dy = it.y - ITEM_DRAW/2;
+      if(it.type==='envelope') drawEnvelope(dx, dy, ITEM_DRAW);
+      else drawFlower(dx, dy, ITEM_DRAW);
     }
   }
 
-  function drawEnvelope(x,y,scale){
+  function drawEnvelope(x,y,targetSize){
+    const baseSize = (typeof targetSize==='number' && targetSize>0) ? targetSize : ITEM_DRAW;
     if(envelopeImg && envelopeImg.complete && envelopeImg.naturalWidth>0){
       const t = performance.now()/1000;
-      const base = 18 * (scale||1);
+      const base = baseSize;
       const pulse = 1 + 0.04 * Math.sin(t*2.1 + (x+y)*0.03);
       const size = Math.round(base * pulse);
       const cx = x + size/2, cy = y + size/2;
@@ -1574,17 +1860,18 @@ if(state.canRestart){
       ctx.restore();
     } else {
       // fallback: pixel-art envelope
-      const s = scale||2;
+      const s = Math.max(1, Math.round(baseSize/16)); // original envelope ~16px wide at s=2
       for(let r=0;r<6;r++){ for(let c=0;c<8;c++){ drawPixel(ctx, x+c*s, y+r*s, s, '#c21807'); } }
       for(let i=0;i<8;i++){ drawPixel(ctx, x+i*s, y+0, s, '#8b0000'); }
       drawPixel(ctx, x+3*s, y+3*s, s, '#d4af37');
       drawPixel(ctx, x+4*s, y+3*s, s, '#d4af37');
     }
   }
-  function drawFlower(x,y,scale){
+  function drawFlower(x,y,targetSize){
+    const baseSize = (typeof targetSize==='number' && targetSize>0) ? targetSize : ITEM_DRAW;
     if(flowerImg && flowerImg.complete && flowerImg.naturalWidth>0){
       const t = performance.now()/1000;
-      const base = 18 * (scale||1);
+      const base = baseSize;
       const pulse = 1 + 0.05 * Math.sin(t*2.6 + (x-y)*0.04);
       const size = Math.round(base * pulse);
       const cx = x + size/2, cy = y + size/2;
@@ -1603,7 +1890,7 @@ if(state.canRestart){
       ctx.restore();
     } else {
       // fallback: original pixel-art flower
-      const s = scale||2;
+      const s = Math.max(1, Math.round(baseSize/16)); // original flower ~16px wide at s=2
       const petal = COL.pink, leaf = COL.leaf;
       drawPixel(ctx, x+2*s, y+1*s, s, petal);
       drawPixel(ctx, x+3*s, y+1*s, s, petal);
@@ -1643,7 +1930,7 @@ if(state.canRestart){
 
   function drawBanner(){
     ctx.save();
-    const x = 10, y = 10, w = VIRTUAL_W - 20, h = 68; // slightly smaller banner
+    const x = 10, y = 10, w = VIRTUAL_W - 20, h = 56; // smaller banner height
 
     // soft gradient background with rounded corners
     const grad = ctx.createLinearGradient(0, y, 0, y + h);
@@ -1651,7 +1938,7 @@ if(state.canRestart){
     grad.addColorStop(1, '#fff4f8');
     ctx.globalAlpha = 0.96;
     ctx.fillStyle = grad;
-    roundRect(ctx, x, y, w, h, 12);
+    roundRect(ctx, x, y, w, h, 10);
     ctx.fill();
     ctx.globalAlpha = 1;
     ctx.strokeStyle = '#00000018';
@@ -1661,14 +1948,14 @@ if(state.canRestart){
     ctx.strokeStyle = 'rgba(212,175,55,0.6)';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(x+12, y+12); ctx.lineTo(x+w-12, y+12);
-    ctx.moveTo(x+12, y+h-12); ctx.lineTo(x+w-12, y+h-12);
+    ctx.moveTo(x+10, y+9); ctx.lineTo(x+w-10, y+9);
+    ctx.moveTo(x+10, y+h-9); ctx.lineTo(x+w-10, y+h-9);
     ctx.stroke();
 
     // big title: แบงค์ & จ๋อม (slightly smaller)
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = '900 22px system-ui, -apple-system, sans-serif';
+    ctx.font = '900 20px system-ui, -apple-system, sans-serif';
     const title = 'แบงค์ ♥ จ๋อม';
     ctx.fillStyle = '#00000022';
     ctx.fillText(title, VIRTUAL_W/2, y + h*0.40 + 1.4); // soft shadow
@@ -1676,12 +1963,12 @@ if(state.canRestart){
     ctx.fillText(title, VIRTUAL_W/2, y + h*0.40);
 
     // subtitle (slightly smaller)
-    ctx.font = '12px system-ui, -apple-system, sans-serif';
+    ctx.font = '11px system-ui, -apple-system, sans-serif';
     ctx.fillStyle = '#6b5a50';
     ctx.fillText('เกม ประตูเงิน ประตูทอง', VIRTUAL_W/2, y + h*0.72);
 
     // tiny decorative hearts (relative to banner height)
-    ctx.font = '16px system-ui, -apple-system, sans-serif';
+    ctx.font = '14px system-ui, -apple-system, sans-serif';
     const heartY = y + h*0.35;
     ctx.fillText('💖', x+24, heartY);
     ctx.fillText('💖', x+w-24, heartY);
@@ -1696,8 +1983,8 @@ if(state.canRestart){
     ctx.textBaseline = 'middle';
     const w = Math.min(300, ctx.measureText(text).width + 40);
     const x = VIRTUAL_W/2;
-    const targetY = VIRTUAL_H * 0.72; // move lower than center
-    const maxY = VIRTUAL_H - GROUND_H - 48; // keep above ground
+    const targetY = VIRTUAL_H * 0.84; // lower near the ground
+    const maxY = VIRTUAL_H - GROUND_H - 24; // keep safe above the pink ground
     const y = Math.min(targetY, maxY);
     ctx.globalAlpha = 0.85;
     ctx.fillStyle = COL.white;
@@ -1773,16 +2060,51 @@ if(state.canRestart){
     }
   }
 
+  function drawGateSparkles(){
+    ctx.save();
+    for(const s of gateFX){
+      const sx = s.x - state.scrollX;
+      if(sx < -40 || sx > VIRTUAL_W + 40) continue;
+      const t = Math.max(0, Math.min(1, s.life / s.lifeMax));
+      ctx.globalAlpha = 0.6 * t; // fade out
+      ctx.translate(sx, s.y);
+      ctx.rotate(s.angle);
+      ctx.fillStyle = s.color;
+      // a thin streak (rotated rectangle)
+      ctx.fillRect(-s.len/2, -0.6, s.len, 1.2);
+      // a tiny cross glint when still bright
+      if(t > 0.5){ ctx.fillRect(-0.6, -s.len/4, 1.2, s.len/2); }
+      ctx.setTransform(DPR,0,0,DPR,0,0);
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+  }
+
   function drawFloats(){
     ctx.save();
-    ctx.font = '12px "Press Start 2P", ui-monospace, monospace';
     ctx.textAlign='center';
+    const now = performance.now();
     for(const f of floats){
+      const lifeT = (f.lifeMax ? Math.max(0, Math.min(1, f.life / f.lifeMax)) : 1);
+      const age = (f.t0 ? (now - f.t0) : 999);
+      const popT = Math.max(0, Math.min(1, (f.dur ? age / f.dur : 1)));
+      const scale = 0.68 + 0.34*easeOutBackK(popT, 2.0); // slightly deeper overshoot but smooth
+      const alpha = 0.25 + 0.75*lifeT;           // fade out over lifetime
+
+      ctx.save();
+      ctx.translate(f.x, f.y);
+      ctx.scale(scale, scale);
+      ctx.globalAlpha = alpha;
+      ctx.font = '12px "Press Start 2P", ui-monospace, monospace';
+      // soft shadow
       ctx.fillStyle = '#ffffff';
-      ctx.fillText(f.text, f.x+1, f.y+1);
+      ctx.fillText(f.text, 1, 1);
+      // main text
       ctx.fillStyle = f.color || '#1b5e20';
-      ctx.fillText(f.text, f.x, f.y);
+      ctx.fillText(f.text, 0, 0);
+      ctx.restore();
     }
+    ctx.globalAlpha = 1;
     ctx.restore();
   }
 
@@ -1842,15 +2164,43 @@ if(state.canRestart){
 
     update();
     clear();
+    // --- Shaken gameplay layers (camera micro-shake) ---
+    const __sh = getShakeOffset();
+    ctx.save();
+    ctx.translate(__sh.x, __sh.y);
     if (passedCount >= 1) drawCoupleClouds();  // โชว์หลังผ่านประตูแรก
     drawClouds();        // behind procession & gates
     drawAmbientPetals(); // subtle particles behind gameplay
     drawProcession();
     drawAllGates();
+    drawGateSparkles();
     updateGateMessage();
     drawGateMessage();
     drawItems();
+    drawPickupFX();
     drawMaidPetals();
+    // player and ground also shake for impact feel
+    drawPlayer();
+    drawGround();
+    ctx.restore();
+  function drawPickupFX(){
+    ctx.save();
+    for(const p of pickupFX){
+      const sx = p.x - state.scrollX;
+      if(sx < -20 || sx > VIRTUAL_W + 20) continue;
+      const t = Math.max(0, Math.min(1, p.life / p.lifeMax));
+      ctx.globalAlpha = 0.25 + 0.75*t; // fade out
+      ctx.fillStyle = p.color;
+      // tiny diamond by rotating a square 45°
+      ctx.translate(sx, p.y);
+      ctx.rotate((p.x + p.y) * 0.01);
+      const s = p.size;
+      ctx.fillRect(-s/2, -s/2, s, s);
+      ctx.setTransform(DPR,0,0,DPR,0,0);
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
 
     if(state.mode!=='endless'){
       const brideOnScreenX = bride.x - state.scrollX;
@@ -1864,8 +2214,8 @@ if(state.canRestart){
       // Speak from the right edge to hint the bride's side
       showBubble(pick(MSG.nearBride), VIRTUAL_W - 12, 86, 'screen', 'right');
     }
-    drawPlayer();
-    drawGround();
+    // drawPlayer();
+    // drawGround();
     drawBanner();
     drawBubbles();
     drawFloats();
@@ -1885,6 +2235,7 @@ if(state.canRestart){
     }
 
     updateModeSwitchUI();
+    updateShareBtnUI();
     requestAnimationFrame(loop);
   }
   loop();
